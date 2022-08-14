@@ -382,6 +382,11 @@ class mode(req_ch_num):
     def seq(self, ch_num):
         return self._internal.val(ch_num, 128)
 
+class charge:
+    CHARge < n >: VOLTage
+    CHARge < n >: OUTCURRent < NRf >
+    CHARge < n >: Res
+    CHARge < n >: ECHO:VOLTage
 
 
 if __name__ == '__main__':
