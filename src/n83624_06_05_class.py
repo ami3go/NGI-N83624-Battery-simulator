@@ -103,11 +103,19 @@ class n83624_06_05_class_tcp:
     def __init__(self):
         self.inst = None
         self.cmd = storage()
+        self._s_ch = 1
+        self._e_ch = 24
+        self._s_ch_all = 1
+        self._e_ch_all = 24
+        self.key_prefix = "NGI_"  # return a list of NGI1V or NGI1I keys for CSV
+        self.key_end_curr = "I"  # prefix for current
+        self.key_end_volt = "V"  # prefix for voltage
 
     def init(self, ip_port, max_ch=max_ch_number):
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
         rm = pyvisa.ResourceManager()
         # print(rm.list_resources())
+        # Visa specific settings
         self.inst = rm.open_resource(ip_port)
         self.inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, 1)
         # self.inst.write_termination = "\n"
@@ -115,17 +123,7 @@ class n83624_06_05_class_tcp:
         self.inst.timeout = 1000  # timeout in ms
         self.inst.query_delay = 0.5  # write/read delay
         self.inst.chunk_size = 102400
-        self._s_ch = 1
-        self._e_ch = 24
-        self._s_ch_all = 1
-        self._e_ch_all = 24
-        self.key_prefex = "NGI_"
-        self.key_end_curr = "I"
-        self.key_end_volt = "V"
-
-
-        dev = self.inst.query('*IDN?')
-        print(f"**** Connected to: {dev} ****")
+        print(f"**** Connected to: {self.inst.query('*IDN?')} ****")
 
 
     @property
@@ -133,15 +131,28 @@ class n83624_06_05_class_tcp:
         return self._s_ch, self._e_ch
 
     @working_channels.setter
-    def working_channels(self, arrya):
-        self._s_ch = int(arrya[0])
-        self._e_ch = int(arrya[1])
+    def working_channels(self, first_last_ch=None):
+        '''
+        set working channels by array [First,Last]
+        Assumed that series connected battery simulated
+        default: First=1, Last = 24
+        @param first_last_ch: [1,10]
+        '''
+        if first_last_ch is None:
+            first_last_ch = [1, 24]
+        self._s_ch = int(first_last_ch[0])
+        self._e_ch = int(first_last_ch[1])
 
     def send(self, cmd_str):
         # print("Send:", cmd_str)
         self.inst.write(cmd_str)
 
     def send_list(self, cmd_list, send_delay=0.5):
+        """
+        methods takes list of command and send it one-by-one with delay
+        @param cmd_list:
+        @param send_delay:
+        """
         for item in cmd_list:
             self.send(item)
             time.sleep(send_delay)
@@ -149,18 +160,18 @@ class n83624_06_05_class_tcp:
 
     def query(self, cmd_str):
         """
-        Query the regula VISA string. It will resend 10 time in case of any error
-
+        Query the regula VISA string.
+        It will resend 10 time in case of any error
         :param cmd_str: VISA string command
         :type cmd_str: str
-
         :return: VISA string replay
         """
+        return_str = ""
         for i in range(10):
             try:
                 # debug print to check how may tries
                 # print("trying",i)
-                return_str = ""
+
                 return_str = self.inst.query(cmd_str)
                 delay()  # regular delay according to datasheet before next command
                 return return_str
@@ -181,11 +192,32 @@ class n83624_06_05_class_tcp:
         cmd_var = self.cmd.source.current.ch_range(self._s_ch, self._e_ch, cell_current),
         self.send(cmd_var)
 
+    def set_current_range(self,value="auto"):
+        """
+        function set current range internal current sensor
+        use "low" for uA, "high" for mA or auto
+        @note "Low" may cause short power loss if device start suddenly consume high current
+        @param value: "low", "high", "auto"
+        """
+        auto_cmd = self.cmd.source.range_auto.ch_range(self._s_ch, self._e_ch)
+        ranges = {
+            "low": self.cmd.source.range_low.ch_range(self._s_ch, self._e_ch),
+            "high": self.cmd.source.range_high.ch_range(self._s_ch, self._e_ch),
+            "auto": auto_cmd,
+        }
+        self.send(ranges.get(value, auto_cmd))
+
     def out_on(self):
+        """
+        Method turn on output of defined cells
+        """
         cmd_var = self.cmd.output.on.ch_range(self._s_ch, self._e_ch)
         self.send(cmd_var)
 
     def out_off(self):
+        """
+        Method turn off output of defined cells
+        """
         cmd_var = self.cmd.output.off.ch_range(self._s_ch, self._e_ch)
         self.send(cmd_var)
 
@@ -198,6 +230,11 @@ class n83624_06_05_class_tcp:
         self.send(cmd_var)
 
     def get_voltage(self, ret_as_dict=False):
+        """
+
+        @param ret_as_dict:
+        @return: array float
+        """
         # read voltage, shorted channel will have low voltage
         txt_val = self.query(self.cmd.measure.voltage.ch_range(self._s_ch, self._e_ch))
         return_val = self.__txt_array_to_digit_array(self.__txt_to_array(txt_val))
@@ -241,7 +278,7 @@ class n83624_06_05_class_tcp:
     def __array_to_dict(self, array_var, prefix="I"):
         dict_var = {}
         for i, val in enumerate(array_var):
-            key = f"{self.key_prefex}{i + 1}{prefix.capitalize()}"
+            key = f"{self.key_prefix}{i + 1}{prefix.capitalize()}"
             dict_var[key] = val
         return dict_var
 
@@ -251,19 +288,91 @@ class n83624_06_05_class_tcp:
         for item in txt_array:
             dig_array.append(round(float(item), round_dig))
         return dig_array
+
     def get_csv_keys(self):
+        """
+        method generates CSV keys for Voltage and Current for pr-defined channels
+        @return: array of keys Voltage, Current
+        """
         txt_const = "NGI_"
         current_keys = []
         volatge_keys = []
         for z in range(self._e_ch):
-            ikey = f"{self.key_prefex}{z+1}{self.key_end_curr}"
-            vkey = f"{self.key_prefex}{z+1}{self.key_end_volt}"
+            ikey = f"{self.key_prefix}{z + 1}{self.key_end_curr}"
+            vkey = f"{self.key_prefix}{z + 1}{self.key_end_volt}"
             current_keys.append(ikey)
             volatge_keys.append(vkey)
         return volatge_keys, current_keys
 
 
-    def short_circuit_test(self, cell_volt=4.3 ):
+    # def short_circuit_test(self, cell_volt=4.3 ):
+    #     '''
+    #     This script check connection
+    #     It make following algorithm:
+    #     1. Switch Off output voltage
+    #     2. Set current limit to 20 mA
+    #     3. Set voltage to 4.3 V
+    #     4. Switch on output voltage
+    #     5. Read each channel voltage
+    #     6. if at list one channel measure below 1 V, this mean that channel shorter
+    #         Or usually  conector swapped
+    #         in this case it terminate execution indicates which channel is shorted
+    #     7. if all channel are >=4.2 V this mean that connection is ok
+    #     '''
+    #     # initiate NGI battery simulator via LAN network
+    #     # NGI default IP is 192.168.0.111:7000
+    #     # check ping in OK, in case of any error here
+    #     s_ch, e_ch = self.working_channels
+    #     error_description = {}
+    #     error_status = False
+    #     # detecting if any short circuit or wrong connection
+    #     # execute list
+    #     ngi_init_list = [
+    #     self.out_off(),
+    #     self.set_current_range("high"),
+    #     self.set_current(20),
+    #     self.set_voltage(cell_volt),
+    #     self.out_on(),
+    #     ]
+    #     for cmd in ngi_init_list:
+    #         cmd()
+    #         delay(1)
+    #
+    #     # ngi_init_list = [
+    #     #     self.cmd.output.off.ch_range(s_ch, e_ch),
+    #     #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
+    #     #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
+    #     #     self.cmd.output.on.ch_range(s_ch, e_ch),
+    #     # ]
+    #     # self.send_list(ngi_init_list, 1)
+    #
+    #     ngi_voltage = self.query(
+    #         self.cmd.measure.voltage.ch_range(s_ch, e_ch))  # read voltage, shorted channel will have low voltage
+    #     ngi_voltage = ngi_voltage.split(",")
+    #
+    #     # checking logic and rise error in case of any channel is shorted
+    #     for i in range(len(ngi_voltage)):
+    #         volt = round(float(ngi_voltage[i]), 2)
+    #         key = f"CH{i + 1}"
+    #         if volt >= (cell_volt-0.1):
+    #             error_description[key] = f"OK , VOLT: {volt}"
+    #         if volt <= (cell_volt-0.3):
+    #             error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
+    #             error_status = True
+    #     if error_status:
+    #         print(f"{Fore.BLACK}{Back.YELLOW}Something shorted, please check cell connection{Style.RESET_ALL}")
+    #         print()
+    #         for key, value in error_description.items():
+    #             if value.find("Shorted") != -1:
+    #                 print(f"{Fore.BLACK}{Back.RED}Key: {key}: {value}{Style.RESET_ALL}")
+    #             else:
+    #                 print(f"{Fore.BLACK}{Back.YELLOW}Key: {key}: {value}{Style.RESET_ALL}")
+    #         raise Exception("Sorry, Something shorted. ")
+    #     self.send(self.cmd.output.off.ch_range(s_ch, e_ch))
+    #     print(f"{Fore.BLACK}{Back.GREEN} **** CMC cell connection OK{Style.RESET_ALL}")
+    #     return
+
+    def short_circuit_test(self, cell_volt=4.3):
         '''
         This script check connection
         It make following algorithm:
@@ -286,26 +395,45 @@ class n83624_06_05_class_tcp:
         # detecting if any short circuit or wrong connection
         # execute list
         ngi_init_list = [
-            self.cmd.output.off.ch_range(s_ch, e_ch),
-            self.cmd.source.current.ch_range(s_ch, e_ch, 20),
-            self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
-            self.cmd.output.on.ch_range(s_ch, e_ch),
+            self.out_off(),
+            self.set_current_range("high"),
+            self.set_current(20),
+            self.set_voltage(cell_volt),
+            self.out_on(),
         ]
-        self.send_list(ngi_init_list, 1)
+        for cmd in ngi_init_list:
+            cmd()
+            delay(1)
 
-        ngi_voltage = self.query(
-            self.cmd.measure.voltage.ch_range(s_ch, e_ch))  # read voltage, shorted channel will have low voltage
-        ngi_voltage = ngi_voltage.split(",")
+        # ngi_init_list = [
+        #     self.cmd.output.off.ch_range(s_ch, e_ch),
+        #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
+        #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
+        #     self.cmd.output.on.ch_range(s_ch, e_ch),
+        # ]
+        # self.send_list(ngi_init_list, 1)
+
+        ngi_voltage = self.get_voltage()
 
         # checking logic and rise error in case of any channel is shorted
-        for i in range(len(ngi_voltage)):
-            volt = round(float(ngi_voltage[i]), 2)
+        for i, volt in enumerate(ngi_voltage):
             key = f"CH{i + 1}"
-            if volt >= 4.2:
+            if volt >= (cell_volt - 0.1):
                 error_description[key] = f"OK , VOLT: {volt}"
-            if volt <= 1:
+            if volt <= (cell_volt - 0.3):
                 error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
                 error_status = True
+
+
+
+        # for i in range(len(ngi_voltage)):
+        #     volt = round(float(ngi_voltage[i]), 2)
+        #     key = f"CH{i + 1}"
+        #     if volt >= (cell_volt - 0.1):
+        #         error_description[key] = f"OK , VOLT: {volt}"
+        #     if volt <= (cell_volt - 0.3):
+        #         error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
+        #         error_status = True
         if error_status:
             print(f"{Fore.BLACK}{Back.YELLOW}Something shorted, please check cell connection{Style.RESET_ALL}")
             print()
@@ -317,7 +445,7 @@ class n83624_06_05_class_tcp:
             raise Exception("Sorry, Something shorted. ")
         self.send(self.cmd.output.off.ch_range(s_ch, e_ch))
         print(f"{Fore.BLACK}{Back.GREEN} **** CMC cell connection OK{Style.RESET_ALL}")
-        return
+        return None
 
     def cmc_set_voltage(self,  all_cell_volt=4.3,  ilim=5000):
         s_ch, e_ch = self.working_channels
