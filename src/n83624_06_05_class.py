@@ -32,13 +32,13 @@ def delay(time_in_sec=0.25):
     time.sleep(time_in_sec)
 
 
-def range_check(val, min, max, val_name):
-    if val > max:
-        print(f"Wrong {val_name}: {val}. Max output should be less then {max} V")
-        val = max
-    if val < min:
-        print(f"Wrong {val_name}: {val}. Should be >= {min}")
-        val = min
+def range_check(val, min_val, max_val, val_name):
+    if val > max_val:
+        print(f"Wrong {val_name}: {val}. Max output should be less then {max_val} V")
+        val = max_val
+    if val < min_val:
+        print(f"Wrong {val_name}: {val}. Should be >= {min_val}")
+        val = min_val
     return val
 
 # n83624_06_05
@@ -254,7 +254,7 @@ class n83624_06_05_class_tcp:
         return return_val
 
     def get_current_avr(self, ret_as_dict=False, n_samples=5):
-        n_samples = range_check(n_samples, 2, 16)
+        n_samples = range_check(n_samples, 2, 16, "get average current")
         i_cells_array = []
         for i in range(n_samples):
             i_cells_array.append(self.get_current())
@@ -271,8 +271,8 @@ class n83624_06_05_class_tcp:
     def __txt_to_array(self, txt):
         txt = txt.split(",")
         arrya_var = []
-        for i in range(len(ngi_voltage)):
-            arrya_var.append(round(float(ngi_voltage[i]), 4))
+        for i in range(len(txt)):
+            arrya_var.append(round(float(txt[i]), 4))
         return arrya_var
 
     def __array_to_dict(self, array_var, prefix="I"):
@@ -284,7 +284,7 @@ class n83624_06_05_class_tcp:
 
     def __txt_array_to_digit_array(self, txt_array, round_dig=6):
         dig_array = []
-        round_dig = range_check(round_dig, 0, 10)
+        round_dig = range_check(round_dig, 0, 10, "__txt_array_to_digit_array")
         for item in txt_array:
             dig_array.append(round(float(item), round_dig))
         return dig_array
@@ -394,24 +394,24 @@ class n83624_06_05_class_tcp:
         error_status = False
         # detecting if any short circuit or wrong connection
         # execute list
-        ngi_init_list = [
-            self.out_off(),
-            self.set_current_range("high"),
-            self.set_current(20),
-            self.set_voltage(cell_volt),
-            self.out_on(),
-        ]
-        for cmd in ngi_init_list:
-            cmd()
-            delay(1)
-
         # ngi_init_list = [
-        #     self.cmd.output.off.ch_range(s_ch, e_ch),
-        #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
-        #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
-        #     self.cmd.output.on.ch_range(s_ch, e_ch),
+        #     self.out_off(),
+        #     self.set_current_range("high"),
+        #     self.set_current(20),
+        #     self.set_voltage(cell_volt),
+        #     self.out_on(),
         # ]
-        # self.send_list(ngi_init_list, 1)
+        # for cmd in ngi_init_list:
+        #     cmd()
+        #     delay(1)
+
+        ngi_init_list = [
+            self.cmd.output.off.ch_range(s_ch, e_ch),
+            self.cmd.source.current.ch_range(s_ch, e_ch, 20),
+            self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
+            self.cmd.output.on.ch_range(s_ch, e_ch),
+        ]
+        self.send_list(ngi_init_list, 1)
 
         ngi_voltage = self.get_voltage()
 
@@ -522,8 +522,8 @@ class _ch_range:
         ch_start = range_check(ch_start, 1, self.max_ch, "CH selection range")
         ch_end = range_check(ch_end, 1, self.max_ch, "CH selection range")
         txt = ""
-        for z in range(ch_start, ch_end + 1):
-            txt = txt + f"{z},"
+        for k in range(ch_start, ch_end + 1):
+            txt = txt + f"{k},"
             # print(txt)
         txt = f"{param}(@{txt[0:-1]})"
         return f"{self.prefix}{self.ending} {txt}"
