@@ -578,6 +578,10 @@ class str_ch_num():
 
 
 class storage:
+    """
+    Class organize hierarchical Visa command list.
+    Methods acts as command constructors with code suggestion if IDE supports it
+    """
     def __init__(self):
         self.cmd = None
         self.prefix = None
@@ -713,24 +717,26 @@ class sequence:
         # This command is used to query the running time for the sequence test file.
         self.run_steps_req = req_ch_num(self.prefix, ":RUN:T")
 
-
+#
+# Testing code
+#
 if __name__ == '__main__':
     cmd = storage()
-    bat_sim = n83624_06_05_class()
-    bat_sim.init("COM12")
-    bat_sim.send(cmd.source.voltage.ch_range(1, 16, 3))
-    bat_sim.send(cmd.output.on.ch_range(1, 16))
-    # bat_sim.send(cmd.rst.str())
-    vcell = 1
-    for z in range(5):
-        bat_sim.send(cmd.source.voltage.ch_range(1, 16, vcell))
-        time.sleep(0.5)
-        print("3: ", bat_sim.query(cmd.measure.voltage.ch_range(1, 16)))
-        time.sleep(1)
-        vcell = vcell + 0.5
-    # bat_sim.send(cmd.source.voltage.ch_range(1, 1, 3.25))
-    # bat_sim.send(cmd.source.voltage.ch_range(2, 2, 3.45))
-    bat_sim.send(cmd.source.current.ch_range(1, 16, 500))
+    # bat_sim = n83624_06_05_class()
+    # bat_sim.init("COM12")
+    # bat_sim.send(cmd.source.voltage.ch_range(1, 16, 3))
+    # bat_sim.send(cmd.output.on.ch_range(1, 16))
+    # # bat_sim.send(cmd.rst.str())
+    # vcell = 1
+    # for z in range(5):
+    #     bat_sim.send(cmd.source.voltage.ch_range(1, 16, vcell))
+    #     time.sleep(0.5)
+    #     print("3: ", bat_sim.query(cmd.measure.voltage.ch_range(1, 16)))
+    #     time.sleep(1)
+    #     vcell = vcell + 0.5
+    # # bat_sim.send(cmd.source.voltage.ch_range(1, 1, 3.25))
+    # # bat_sim.send(cmd.source.voltage.ch_range(2, 2, 3.45))
+    # bat_sim.send(cmd.source.current.ch_range(1, 16, 500))
     # bat_sim.send(cmd.output.on.ch_range(1, 16))
     # time.sleep(0.1)
     # print("1: ", bat_sim.query(cmd.measure.voltage.ch_num(1)))
@@ -738,16 +744,16 @@ if __name__ == '__main__':
     #
     # print("4: ", bat_sim.query(cmd.measure.voltage.ch_num(1)))
     # print(bat_sim.query(cmd.measure.voltage.ch_ra))
-    bat_sim.close()
-    # print(cmd.measure.voltage.ch_num(5))
-    # print(cmd.measure.temp.ch_num(10))
-    # print(cmd.measure.mah.ch_num(20))
-    # print(cmd.output.mode_source.ch_num(10))
-    # print(cmd.output.mode_SEQ.ch_num(24))
-    # print(cmd.output.mode_req.ch_num(12))
-    # print(cmd.output.on.ch_num(6))
-    # print(cmd.source.voltage.ch_num(10, 10))
-    # print(cmd.source.voltage.ch_num_req(10))
-    # print(cmd.source.current.ch_num(20, 500))
-    # print(cmd.charge.echo_capacity.ch_num(13))
-    # print(cmd.source.voltage.ch_range(1, 1, 5))
+    # bat_sim.close()
+    print(cmd.measure.voltage.ch_num(5))
+    print(cmd.measure.temp.ch_num(10))
+    print(cmd.measure.mah.ch_num(20))
+    print(cmd.output.mode_source.ch_num(10))
+    print(cmd.output.mode_SEQ.ch_num(24))
+    print(cmd.output.mode_req.ch_num(12))
+    print(cmd.output.on.ch_num(6))
+    print(cmd.source.voltage.ch_num(10, 10))
+    print(cmd.source.voltage.ch_num_req(10))
+    print(cmd.source.current.ch_num(20, 500))
+    print(cmd.charge.echo_capacity.ch_num(13))
+    print(cmd.source.voltage.ch_range(1, 1, 5))
