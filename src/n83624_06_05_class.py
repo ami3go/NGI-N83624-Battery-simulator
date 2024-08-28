@@ -103,10 +103,10 @@ class n83624_06_05_class_tcp:
     def __init__(self):
         self.inst = None
         self.cmd = storage()
-        self._s_ch = 1
-        self._e_ch = 24
-        self._s_ch_all = 1
-        self._e_ch_all = 24
+        self._s_ch = 1 # operational channels
+        self._e_ch = 24 # operational channels
+        self._s_ch_all = 1 # used in methods with prefix all
+        self._e_ch_all = 24 # used in methods with prefix all
         self.key_prefix = "NGI_"  # return a list of NGI1V or NGI1I keys for CSV
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
@@ -157,7 +157,6 @@ class n83624_06_05_class_tcp:
             self.send(item)
             time.sleep(send_delay)
 
-
     def query(self, cmd_str):
         """
         Query the regula VISA string.
@@ -185,6 +184,10 @@ class n83624_06_05_class_tcp:
         self.inst = None
 
     def set_voltage(self,  cell_volt):
+        """
+        Setting output voltage.
+        :param cell_volt: 0V to 6V
+        """
         cmd_var = self.cmd.source.voltage.ch_range(self._s_ch, self._e_ch, cell_volt)
         self.send(cmd_var)
 
@@ -193,11 +196,10 @@ class n83624_06_05_class_tcp:
         self.send(cmd_var)
 
     def set_current_range(self,value="auto"):
-        """
-        function set current range internal current sensor
-        use "low" for uA, "high" for mA or auto
-        @note "Low" may cause short power loss if device start suddenly consume high current
-        @param value: "low", "high", "auto"
+        """Set current range internal current sensor use "low" for uA, "high" for mA or auto.
+        "Low" may cause short power loss if device start suddenly consume high current.
+        :param value: "low", "high", "auto"
+        :type: vale str
         """
         auto_cmd = self.cmd.source.range_auto.ch_range(self._s_ch, self._e_ch)
         ranges = {
@@ -208,16 +210,12 @@ class n83624_06_05_class_tcp:
         self.send(ranges.get(value, auto_cmd))
 
     def out_on(self):
-        """
-        Method turn on output of defined cells
-        """
+        """Turn output ON for pre-defined cells"""
         cmd_var = self.cmd.output.on.ch_range(self._s_ch, self._e_ch)
         self.send(cmd_var)
 
     def out_off(self):
-        """
-        Method turn off output of defined cells
-        """
+        """Turn output OFF for pre-defined cells"""
         cmd_var = self.cmd.output.off.ch_range(self._s_ch, self._e_ch)
         self.send(cmd_var)
 
@@ -231,9 +229,10 @@ class n83624_06_05_class_tcp:
 
     def get_voltage(self, ret_as_dict=False):
         """
-
-        @param ret_as_dict:
-        @return: array float
+        Read Voltages for pre-defined channels
+        :param ret_as_dict: True - return dictionary,
+                            False - return array
+        :return:  dictionary or array float
         """
         # read voltage, shorted channel will have low voltage
         txt_val = self.query(self.cmd.measure.voltage.ch_range(self._s_ch, self._e_ch))
@@ -244,7 +243,11 @@ class n83624_06_05_class_tcp:
         return return_val
 
     def get_current(self, ret_as_dict=False):
+        """
 
+        :param ret_as_dict:
+        :return: array dictionary or array float
+        """
         # read voltage, shorted channel will have low voltage
         txt_val = self.query(self.cmd.measure.current.ch_range(self._s_ch, self._e_ch))
         return_val = self.__txt_array_to_digit_array(self.__txt_to_array(txt_val))
