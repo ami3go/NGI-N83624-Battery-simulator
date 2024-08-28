@@ -19,7 +19,7 @@ def ngi_ini_conf():
     global ngi, s_ch, e_ch
     ngi.send(ngi.cmd.rst.str())
     time.sleep(5)
-    ngi.send(ngi.cmd.output.mode_source.ch_range(s_ch, e_ch,))
+    ngi.send(ngi.cmd.output.mode_source.ch_range(s_ch, e_ch, ))
 
 def ngi_set_voltages(vout):
     global ngi, s_ch, e_ch

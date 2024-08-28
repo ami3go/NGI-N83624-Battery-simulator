@@ -8,7 +8,7 @@ import numpy as np
 default_ip_port = "TCPIP0::192.168.0.111::7000::SOCKET"
 default_com = "COM5"
 
-class bcolors:
+class Bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -132,12 +132,12 @@ class n83624_06_05_class_tcp:
 
     @working_channels.setter
     def working_channels(self, first_last_ch=None):
-        '''
+        """
         set working channels by array [First,Last]
         Assumed that series connected battery simulated
         default: First=1, Last = 24
         @param first_last_ch: [1,10]
-        '''
+        """
         if first_last_ch is None:
             first_last_ch = [1, 24]
         self._s_ch = int(first_last_ch[0])
@@ -274,10 +274,10 @@ class n83624_06_05_class_tcp:
     @staticmethod
     def __txt_to_array(txt):
         txt = txt.split(",")
-        arrya_var = []
+        array_var = []
         for i in range(len(txt)):
-            arrya_var.append(round(float(txt[i]), 4))
-        return arrya_var
+            array_var.append(round(float(txt[i]), 4))
+        return array_var
 
     @staticmethod
     def __array_to_dict(self, array_var, prefix="I"):
@@ -379,9 +379,9 @@ class n83624_06_05_class_tcp:
     #     return
 
     def short_circuit_test(self, cell_volt=4.3):
-        '''
+        """
         This script check connection
-        It make following algorithm:
+        It makes following algorithm:
         1. Switch Off output voltage
         2. Set current limit to 20 mA
         3. Set voltage to 4.3 V
@@ -391,7 +391,7 @@ class n83624_06_05_class_tcp:
             Or usually connector swapped
             in this case it terminate execution indicates which channel is shorted
         7. if all channel are >=4.2 V this mean that connection is ok
-        '''
+        """
         # initiate NGI battery simulator via LAN network
         # NGI default IP is 192.168.0.111:7000
         # check ping in OK, in case of any error here
@@ -473,7 +473,7 @@ class n83624_06_05_class_tcp:
 # Service classes for inheritance
 # they just help to reduce amount of linear code
 
-class req3:
+class Req3:
     def __init__(self, prefix):
         self.prefix = prefix
         self.cmd = self.prefix
@@ -482,7 +482,7 @@ class req3:
         return self.cmd + "?"
 
 
-class str3:
+class Str3:
     def __init__(self, prefix):
         self.prefix = prefix
         self.cmd = self.prefix
@@ -491,30 +491,10 @@ class str3:
         return self.cmd
 
 
-class str_and_req(str3, req3):
+class StrAndReq(Str3, Req3):
     def __init__(self, prefix):
         self.prefix = prefix
         self.cmd = self.prefix
-
-
-# class ch_str():
-#     '''
-#     service class that insert channel return channel number
-#     '''
-#     def __init__(self, prefix,  max_ch=max_ch_number):
-#         self.prefix = prefix
-#         self.max_ch = max_ch
-#         self.cmd = ""
-#         self.ending = ""
-#     def ch_num(self, ch_num):
-#         ch_num = range_check(ch_num, 1, self.max_ch, "CH selection")
-#         return f"{self.prefix}{ch_num}{self.ending}"
-
-
-# class ch_req(ch_str):
-#     def ch_num(self, ch_num):
-#         ch_num = range_check(ch_num, 1, max_ch_number, "CH selection")
-#         return f"{self.prefix}{ch_num}{self.ending}?"
 
 
 class _ch_range:
@@ -537,13 +517,13 @@ class _ch_range:
 
 
 class ch_str_param(_ch_range):
-    def __init__(self, prefix, ending, min=0, max=6, max_ch=max_ch_number):
+    def __init__(self, prefix, ending, min_v=0, max_v=6, max_ch=max_ch_number):
         self.prefix = prefix
         self.max_ch = max_ch
         self.cmd = ""
         self.ending = ":" + ending
-        self.min_val = min
-        self.max_val = max
+        self.min_val = min_v
+        self.max_val = max_v
     def ch_num(self, ch_num, param):
         param = range_check(param,self.min_val, self.max_val, "ch_str_param")
         ch_num = range_check(ch_num, 1, self.max_ch, "CH selection")
@@ -600,9 +580,9 @@ class storage:
         self.source = source()
         self.output = output()
         self.measure = measure()
-        self.idn = req3("*IDN")
-        self.opc = str_and_req("*OPС")
-        self.rst = tr3("*RST")
+        self.idn = Req3("*IDN")
+        self.opc = StrAndReq("*OPС")
+        self.rst = Str3("*RST")
 
 #
 #  Main classes
