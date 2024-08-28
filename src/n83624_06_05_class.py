@@ -271,13 +271,15 @@ class n83624_06_05_class_tcp:
     #
     # service functions
     #
-    def __txt_to_array(self, txt):
+    @staticmethod
+    def __txt_to_array(txt):
         txt = txt.split(",")
         arrya_var = []
         for i in range(len(txt)):
             arrya_var.append(round(float(txt[i]), 4))
         return arrya_var
 
+    @staticmethod
     def __array_to_dict(self, array_var, prefix="I"):
         dict_var = {}
         for i, val in enumerate(array_var):
@@ -285,27 +287,28 @@ class n83624_06_05_class_tcp:
             dict_var[key] = val
         return dict_var
 
-    def __txt_array_to_digit_array(self, txt_array, round_dig=6):
+    @staticmethod
+    def __txt_array_to_digit_array(txt_array, round_dig=6):
         dig_array = []
         round_dig = range_check(round_dig, 0, 10, "__txt_array_to_digit_array")
         for item in txt_array:
             dig_array.append(round(float(item), round_dig))
         return dig_array
 
+    @staticmethod
     def get_csv_keys(self):
         """
-        method generates CSV keys for Voltage and Current for pr-defined channels
-        @return: array of keys Voltage, Current
+        Returns CSV keys for Voltage and Current for pr-defined channels
+        @return: string array of keys [Voltage, Current]
         """
-        txt_const = "NGI_"
         current_keys = []
-        volatge_keys = []
+        voltage_keys = []
         for z in range(self._e_ch):
-            ikey = f"{self.key_prefix}{z + 1}{self.key_end_curr}"
-            vkey = f"{self.key_prefix}{z + 1}{self.key_end_volt}"
-            current_keys.append(ikey)
-            volatge_keys.append(vkey)
-        return volatge_keys, current_keys
+            i_key = f"{self.key_prefix}{z + 1}{self.key_end_curr}"
+            v_key = f"{self.key_prefix}{z + 1}{self.key_end_volt}"
+            current_keys.append(i_key)
+            voltage_keys.append(v_key)
+        return [voltage_keys, current_keys]
 
 
     # def short_circuit_test(self, cell_volt=4.3 ):
@@ -385,7 +388,7 @@ class n83624_06_05_class_tcp:
         4. Switch on output voltage
         5. Read each channel voltage
         6. if at list one channel measure below 1 V, this mean that channel shorter
-            Or usually  conector swapped
+            Or usually connector swapped
             in this case it terminate execution indicates which channel is shorted
         7. if all channel are >=4.2 V this mean that connection is ok
         '''
@@ -598,8 +601,8 @@ class storage:
         self.output = output()
         self.measure = measure()
         self.idn = req3("*IDN")
-        self.opс = str_and_req("*OPС")
-        self.rst = str3("*RST")
+        self.opc = str_and_req("*OPС")
+        self.rst = tr3("*RST")
 
 #
 #  Main classes
