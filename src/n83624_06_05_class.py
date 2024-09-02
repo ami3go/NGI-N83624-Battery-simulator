@@ -111,7 +111,7 @@ class n83624_06_05_class_tcp:
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
 
-    def init(self, ip_port, max_ch=max_ch_number):
+    def init(self, ip_port = default_ip_port, max_ch=max_ch_number):
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
         rm = pyvisa.ResourceManager()
         # print(rm.list_resources())
@@ -159,8 +159,9 @@ class n83624_06_05_class_tcp:
 
     def query(self, cmd_str):
         """
-        Query the regula VISA string.
-        It will resend 10 time in case of any error
+        NGI firmware have slow processing time for some command.
+        Regular query have frequently fails with "TMO" error
+        Retry strategy is implemented
         :param cmd_str: VISA string command
         :type cmd_str: str
         :return: VISA string replay
@@ -315,72 +316,6 @@ class n83624_06_05_class_tcp:
         return [voltage_keys, current_keys]
 
 
-    # def short_circuit_test(self, cell_volt=4.3 ):
-    #     '''
-    #     This script check connection
-    #     It make following algorithm:
-    #     1. Switch Off output voltage
-    #     2. Set current limit to 20 mA
-    #     3. Set voltage to 4.3 V
-    #     4. Switch on output voltage
-    #     5. Read each channel voltage
-    #     6. if at list one channel measure below 1 V, this mean that channel shorter
-    #         Or usually  conector swapped
-    #         in this case it terminate execution indicates which channel is shorted
-    #     7. if all channel are >=4.2 V this mean that connection is ok
-    #     '''
-    #     # initiate NGI battery simulator via LAN network
-    #     # NGI default IP is 192.168.0.111:7000
-    #     # check ping in OK, in case of any error here
-    #     s_ch, e_ch = self.working_channels
-    #     error_description = {}
-    #     error_status = False
-    #     # detecting if any short circuit or wrong connection
-    #     # execute list
-    #     ngi_init_list = [
-    #     self.out_off(),
-    #     self.set_current_range("high"),
-    #     self.set_current(20),
-    #     self.set_voltage(cell_volt),
-    #     self.out_on(),
-    #     ]
-    #     for cmd in ngi_init_list:
-    #         cmd()
-    #         delay(1)
-    #
-    #     # ngi_init_list = [
-    #     #     self.cmd.output.off.ch_range(s_ch, e_ch),
-    #     #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
-    #     #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
-    #     #     self.cmd.output.on.ch_range(s_ch, e_ch),
-    #     # ]
-    #     # self.send_list(ngi_init_list, 1)
-    #
-    #     ngi_voltage = self.query(
-    #         self.cmd.measure.voltage.ch_range(s_ch, e_ch))  # read voltage, shorted channel will have low voltage
-    #     ngi_voltage = ngi_voltage.split(",")
-    #
-    #     # checking logic and rise error in case of any channel is shorted
-    #     for i in range(len(ngi_voltage)):
-    #         volt = round(float(ngi_voltage[i]), 2)
-    #         key = f"CH{i + 1}"
-    #         if volt >= (cell_volt-0.1):
-    #             error_description[key] = f"OK , VOLT: {volt}"
-    #         if volt <= (cell_volt-0.3):
-    #             error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
-    #             error_status = True
-    #     if error_status:
-    #         print(f"{Fore.BLACK}{Back.YELLOW}Something shorted, please check cell connection{Style.RESET_ALL}")
-    #         print()
-    #         for key, value in error_description.items():
-    #             if value.find("Shorted") != -1:
-    #                 print(f"{Fore.BLACK}{Back.RED}Key: {key}: {value}{Style.RESET_ALL}")
-    #             else:
-    #                 print(f"{Fore.BLACK}{Back.YELLOW}Key: {key}: {value}{Style.RESET_ALL}")
-    #         raise Exception("Sorry, Something shorted. ")
-    #     self.send(self.cmd.output.off.ch_range(s_ch, e_ch))
-    #     print(f"{Fore.BLACK}{Back.GREEN} **** CMC cell connection OK{Style.RESET_ALL}")
-    #     return
 
     def short_circuit_test(self, cell_volt=4.3):
         """
@@ -712,7 +647,8 @@ class sequence:
 #
 if __name__ == '__main__':
     cmd = storage()
-    # bat_sim = n83624_06_05_class()
+    bat_sim = n83624_06_05_class_tcp()
+    bat_sim.init()
     # bat_sim.init("COM12")
     # bat_sim.send(cmd.source.voltage.ch_range(1, 16, 3))
     # bat_sim.send(cmd.output.on.ch_range(1, 16))
