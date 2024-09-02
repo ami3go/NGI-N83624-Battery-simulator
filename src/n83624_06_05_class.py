@@ -166,7 +166,7 @@ class n83624_06_05_class_tcp:
         :return: VISA string replay
         """
         return_str = ""
-        for i in range(10):
+        for i in range(100):
             try:
                 # debug print to check how may tries
                 # print("trying",i)
