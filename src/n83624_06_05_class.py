@@ -123,7 +123,7 @@ class n83624_06_05_class_tcp:
         self.inst.timeout = 1000  # timeout in ms
         self.inst.query_delay = 0.5  # write/read delay
         self.inst.chunk_size = 102400
-        print(f"**** Connected to: {self.inst.query('*IDN?')} ****")
+        print(f"**** Connected to: {self.get_idn()} ****")
 
 
     @property
@@ -267,6 +267,10 @@ class n83624_06_05_class_tcp:
         if ret_as_dict:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
         return return_val
+
+    def get_idn(self):
+        return self.query(self.cmd.idn.req())
+
 
     #
     # service functions
