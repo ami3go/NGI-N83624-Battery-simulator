@@ -196,7 +196,7 @@ class n83624_06_05_class_tcp:
         cmd_var = self.cmd.source.current.ch_range(self._s_ch, self._e_ch, cell_current),
         self.send(cmd_var)
 
-    def set_current_range(self,value="auto"):
+    def set_current_range(self, value="auto"):
         """Set current range internal current sensor use "low" for uA, "high" for mA or auto.
         "Low" may cause short power loss if device start suddenly consume high current.
         :param value: "low", "high", "auto"
@@ -221,10 +221,12 @@ class n83624_06_05_class_tcp:
         self.send(cmd_var)
 
     def out_on_all(self):
+        """ Turn output of all channels ON"""
         cmd_var = self.cmd.output.off.ch_range(self._s_ch_all, self._e_ch_all)
         self.send(cmd_var)
 
     def out_off_all(self):
+        """ Turn output of all channels OFF"""
         cmd_var = self.cmd.output.off.ch_range(self._s_ch_all, self._e_ch_all)
         self.send(cmd_var)
 
@@ -357,7 +359,6 @@ class n83624_06_05_class_tcp:
             self.cmd.output.on.ch_range(s_ch, e_ch),
         ]
         self.send_list(ngi_init_list, 1)
-
         ngi_voltage = self.get_voltage()
 
         # checking logic and rise error in case of any channel is shorted
