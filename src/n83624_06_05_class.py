@@ -192,8 +192,9 @@ class n83624_06_05_class_tcp:
         cmd_var = self.cmd.source.voltage.ch_range(self._s_ch, self._e_ch, cell_volt)
         self.send(cmd_var)
 
+
     def set_current(self, cell_current):
-        cmd_var = self.cmd.source.current.ch_range(self._s_ch, self._e_ch, cell_current),
+        cmd_var = self.cmd.source.current.ch_range(self._s_ch, self._e_ch, cell_current)
         self.send(cmd_var)
 
     def set_current_range(self, value="auto"):
