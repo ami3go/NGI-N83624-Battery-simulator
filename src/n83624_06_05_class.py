@@ -339,6 +339,7 @@ class n83624_06_05_class_tcp:
         # initiate NGI battery simulator via LAN network
         # NGI default IP is 192.168.0.111:7000
         # check ping in OK, in case of any error here
+        cell_volt = range_check(cell_volt, 0.1, 6, "short_circuit_test" )
         s_ch, e_ch = self.working_channels
         error_description = {}
         error_status = False
@@ -354,14 +355,21 @@ class n83624_06_05_class_tcp:
         # for cmd in ngi_init_list:
         #     cmd()
         #     delay(1)
-
-        ngi_init_list = [
-            self.cmd.output.off.ch_range(s_ch, e_ch),
-            self.cmd.source.current.ch_range(s_ch, e_ch, 20),
-            self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
-            self.cmd.output.on.ch_range(s_ch, e_ch),
-        ]
-        self.send_list(ngi_init_list, 1)
+        self.out_off()
+        delay(0.5)
+        self.set_current(20)
+        delay(0.5)
+        self.set_voltage(cell_volt)
+        delay(0.5)
+        self.out_on()
+        delay(0.5)
+        # ngi_init_list = [
+        #     self.cmd.output.off.ch_range(s_ch, e_ch),
+        #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
+        #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
+        #     self.cmd.output.on.ch_range(s_ch, e_ch),
+        # ]
+        # self.send_list(ngi_init_list, 1)
         ngi_voltage = self.get_voltage()
 
         # checking logic and rise error in case of any channel is shorted
@@ -392,7 +400,8 @@ class n83624_06_05_class_tcp:
                 else:
                     print(f"{Fore.BLACK}{Back.YELLOW}Key: {key}: {value}{Style.RESET_ALL}")
             raise Exception("Sorry, Something shorted. ")
-        self.send(self.cmd.output.off.ch_range(s_ch, e_ch))
+        self.out_off()
+        # self.send(self.cmd.output.off.ch_range(s_ch, e_ch))
         print(f"{Fore.BLACK}{Back.GREEN} **** CMC cell connection OK{Style.RESET_ALL}")
         return None
 
