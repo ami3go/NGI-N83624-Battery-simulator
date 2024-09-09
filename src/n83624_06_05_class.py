@@ -111,7 +111,7 @@ class n83624_06_05_class_tcp:
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
 
-    def init(self, ip_port = default_ip_port, max_ch=max_ch_number):
+    def init(self, ip_port=default_ip_port, max_ch=max_ch_number):
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
         rm = pyvisa.ResourceManager()
         # print(rm.list_resources())
@@ -123,6 +123,8 @@ class n83624_06_05_class_tcp:
         self.inst.timeout = 1000  # timeout in ms
         self.inst.query_delay = 0.5  # write/read delay
         self.inst.chunk_size = 102400
+        self._e_ch = max_ch
+        self._e_ch_all = max_ch
         print(f"**** Connected to: {self.get_idn()} ****")
 
 
@@ -139,7 +141,7 @@ class n83624_06_05_class_tcp:
         @param first_last_ch: [1,10]
         """
         if first_last_ch is None:
-            first_last_ch = [1, 24]
+            first_last_ch = [1, self._e_ch_all]
         self._s_ch = int(first_last_ch[0])
         self._e_ch = int(first_last_ch[1])
 
@@ -198,7 +200,7 @@ class n83624_06_05_class_tcp:
         self.send(cmd_var)
 
     def set_current_range(self, value="auto"):
-        """Set current range internal current sensor use "low" for uA, "high" for mA or auto.
+        """Current range of internal current sensor: "low" for uA, "high" for mA or auto.
         "Low" may cause short power loss if device start suddenly consume high current.
         :param value: "low", "high", "auto"
         :type: vale str
