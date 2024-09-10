@@ -345,31 +345,14 @@ class n83624_06_05_class_tcp:
         error_status = False
         # detecting if any short circuit or wrong connection
         # execute list
-        # ngi_init_list = [
-        #     self.out_off(),
-        #     self.set_current_range("high"),
-        #     self.set_current(20),
-        #     self.set_voltage(cell_volt),
-        #     self.out_on(),
-        # ]
-        # for cmd in ngi_init_list:
-        #     cmd()
-        #     delay(1)
-        self.out_off()
-        delay(0.5)
-        self.set_current(20)
-        delay(0.5)
-        self.set_voltage(cell_volt)
-        delay(0.5)
-        self.out_on()
-        delay(0.5)
-        # ngi_init_list = [
-        #     self.cmd.output.off.ch_range(s_ch, e_ch),
-        #     self.cmd.source.current.ch_range(s_ch, e_ch, 20),
-        #     self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
-        #     self.cmd.output.on.ch_range(s_ch, e_ch),
-        # ]
-        # self.send_list(ngi_init_list, 1)
+        ngi_init_list = [
+            self.cmd.output.off.ch_range(s_ch, e_ch),
+            self.cmd.source.current.ch_range(s_ch, e_ch, 20),
+            self.cmd.source.range_high.ch_range(s_ch, e_ch),
+            self.cmd.source.voltage.ch_range(s_ch, e_ch, cell_volt),
+            self.cmd.output.on.ch_range(s_ch, e_ch),
+        ]
+        self.send_list(ngi_init_list, 1)
         ngi_voltage = self.get_voltage()
 
         # checking logic and rise error in case of any channel is shorted
