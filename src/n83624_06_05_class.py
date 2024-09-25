@@ -289,7 +289,7 @@ class n83624_06_05_class_tcp:
             array_var.append(round(float(txt[i]), 4))
         return array_var
 
-    @staticmethod
+
     def __array_to_dict(self, array_var, prefix="I"):
         dict_var = {}
         for i, val in enumerate(array_var):
@@ -305,7 +305,6 @@ class n83624_06_05_class_tcp:
             dig_array.append(round(float(item), round_dig))
         return dig_array
 
-    @staticmethod
     def get_csv_keys(self):
         """
         Returns CSV keys for Voltage and Current for pr-defined channels
