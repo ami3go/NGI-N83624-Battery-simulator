@@ -121,7 +121,7 @@ class n83624_06_05_class_tcp:
         # self.inst.write_termination = "\n"
         self.inst.read_termination = '\r\n'
         self.inst.timeout = 1000  # timeout in ms
-        self.inst.query_delay = 0.5  # write/read delay
+        self.inst.query_delay = 1  # write/read delay
         self.inst.chunk_size = 102400
         self._e_ch = max_ch
         self._e_ch_all = max_ch
@@ -268,7 +268,8 @@ class n83624_06_05_class_tcp:
         for i in range(n_samples):
             i_cells_array.append(self.get_current())
             time.sleep(3)
-        return_val = np.mean(np.array(i_cells_array))
+        np_array = np.mean(np.array(i_cells_array))
+        return  np_array.tolist()
 
         if ret_as_dict:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
