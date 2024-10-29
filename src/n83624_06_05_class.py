@@ -148,15 +148,18 @@ class n83624_06_05_class_tcp:
         self._s_ch = int(first_last_ch[0])
         self._e_ch = int(first_last_ch[1])
 
-    # @property
-    # def _send_delay(self):
-    #     return self._send_delay
-    #
-    # @_send_delay.setter
-    # def _send_delay(self, var=0.2):
-    #     # var = range_check(var, 0.001, 2, "NGI send_delay")
-    #     self._send_delay = var
+    @property
+    def send_delay(self):
+        return self._send_delay
 
+    # Setter for _send_delay with validation
+    @send_delay.setter
+    def send_delay(self, delay_val):
+        if isinstance(delay_val, (int, float)) and delay_val >= 0:
+            var = range_check(delay_val, 0.001, 2, "NGI send_delay")
+            self._send_delay = delay
+        else:
+            raise ValueError("send_delay must be a non-negative number.")
 
     def send(self, cmd_str):
         # print("Send:", cmd_str)
