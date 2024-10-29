@@ -81,6 +81,7 @@ class n83624_06_05_class:
     def send(self, cmd_str):
         txt = f'{cmd_str}\r\n'
         # print("Send:", txt)
+
         self.inst.write(txt.encode())
 
     def query(self, cmd_srt):
@@ -110,6 +111,7 @@ class n83624_06_05_class_tcp:
         self.key_prefix = "NGI_"  # return a list of NGI1V or NGI1I keys for CSV
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
+        self._send_delay = 0.2
 
     def init(self, ip_port=default_ip_port, max_ch=max_ch_number):
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
@@ -122,6 +124,7 @@ class n83624_06_05_class_tcp:
         self.inst.read_termination = '\r\n'
         self.inst.timeout = 1000  # timeout in ms
         self.inst.query_delay = 1  # write/read delay
+
         self.inst.chunk_size = 102400
         self._e_ch = max_ch
         self._e_ch_all = max_ch
@@ -145,8 +148,20 @@ class n83624_06_05_class_tcp:
         self._s_ch = int(first_last_ch[0])
         self._e_ch = int(first_last_ch[1])
 
+    # @property
+    # def _send_delay(self):
+    #     return self._send_delay
+    #
+    # @_send_delay.setter
+    # def _send_delay(self, var=0.2):
+    #     # var = range_check(var, 0.001, 2, "NGI send_delay")
+    #     self._send_delay = var
+
+
     def send(self, cmd_str):
         # print("Send:", cmd_str)
+        # if self.send_delay != 0:
+        time.sleep(self._send_delay)
         self.inst.write(cmd_str)
 
     def send_list(self, cmd_list, send_delay=0.5):
