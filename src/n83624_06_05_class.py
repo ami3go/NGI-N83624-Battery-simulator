@@ -111,7 +111,7 @@ class n83624_06_05_class_tcp:
         self.key_prefix = "NGI_"  # return a list of NGI1V or NGI1I keys for CSV
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
-        self._send_delay = 0.2
+        self._send_delay = 0.3
 
     def init(self, ip_port=default_ip_port, max_ch=max_ch_number):
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
