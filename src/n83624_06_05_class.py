@@ -284,17 +284,18 @@ class n83624_06_05_class_tcp:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
         return return_val
 
-    def get_current_avr(self, ret_as_dict=False, n_samples=5):
+    def get_current_avr(self, ret_as_dict=False, n_samples=5, delay=3):
         n_samples = range_check(n_samples, 2, 16, "get average current")
         i_cells_array = []
         for i in range(n_samples):
             i_cells_array.append(self.get_current())
-            time.sleep(3)
+            time.sleep(delay)
         np_array = np.mean(np.array(i_cells_array))
-        return  np_array.tolist()
 
         if ret_as_dict:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
+        else:
+            return_val = np_array.tolist()
         return return_val
 
     def get_idn(self):
