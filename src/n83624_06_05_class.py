@@ -122,7 +122,7 @@ class n83624_06_05_class_tcp:
         self.inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, 1)
         # self.inst.write_termination = "\n"
         self.inst.read_termination = '\r\n'
-        self.inst.timeout = 1000  # timeout in ms
+        self.inst.timeout = 5000  # timeout in ms
         self.inst.query_delay = 1  # write/read delay
 
         self.inst.chunk_size = 102400
@@ -230,6 +230,9 @@ class n83624_06_05_class_tcp:
             "auto": auto_cmd,
         }
         self.send(ranges.get(value, auto_cmd))
+        # set minimum current of 1mA because by default it is 0 when switching ranges
+        if value in ["auto", "low"]:
+            self.set_current(1)
 
     def out_on(self):
         """Turn output ON for pre-defined cells"""
@@ -273,24 +276,26 @@ class n83624_06_05_class_tcp:
         :return: array dictionary or array float
         """
         # read voltage, shorted channel will have low voltage
+        self.inst.query_delay = 4.5  # write/read delay
         txt_val = self.query(self.cmd.measure.current.ch_range(self._s_ch, self._e_ch))
         return_val = self.__txt_array_to_digit_array(self.__txt_to_array(txt_val))
-
+        self.inst.query_delay = 1  # write/read delay
         if ret_as_dict:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
         return return_val
 
-    def get_current_avr(self, ret_as_dict=False, n_samples=5):
+    def get_current_avr(self, ret_as_dict=False, n_samples=5, delay=3):
         n_samples = range_check(n_samples, 2, 16, "get average current")
         i_cells_array = []
         for i in range(n_samples):
             i_cells_array.append(self.get_current())
-            time.sleep(3)
+            time.sleep(delay)
         np_array = np.mean(np.array(i_cells_array))
-        return  np_array.tolist()
 
         if ret_as_dict:
             return_val = self.__array_to_dict(return_val, self.key_end_curr)
+        else:
+            return_val = np_array.tolist()
         return return_val
 
     def get_idn(self):
