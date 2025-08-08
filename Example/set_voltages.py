@@ -3,8 +3,8 @@ import time
 import pandas as pd
 global ngi, s_ch, e_ch
 from colorama import Style, Fore, Back
-ngi = bat_sim.n83624_06_05_class()
-ngi.init("COM12")
+ngi = bat_sim.n83624_06_05_class_tcp()
+ngi.init()
 
 ehv7_csvfile = 'EHV-7_PPE41C.csv'
 
@@ -386,8 +386,8 @@ if __name__ == '__main__':
     # EHV03()
     #
     # EHV07(-25)
-    EHV07(55)
-    EHV07(20)
+    # EHV07(55)
+    # EHV07(20)
 
 
 

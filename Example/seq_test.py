@@ -2,7 +2,7 @@ import src.n83624_06_05_class as bat_sim
 import time
 
 global ngi, s_ch, e_ch
-ngi = bat_sim.n83624_06_05_class()
+ngi = bat_sim.n83624_06_05_class_tcp()
 ngi.init("COM12")
 s_ch = 1 # start channel
 e_ch = 16 # end channel
