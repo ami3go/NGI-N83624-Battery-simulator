@@ -1,4 +1,4 @@
-import src.n83624_06_05_class as bat_sim
+import N83624.n83624_06_05_class as bat_sim
 import time
 
 global ngi, s_ch, e_ch
