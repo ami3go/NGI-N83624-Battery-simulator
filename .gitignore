@@ -153,3 +153,4 @@ cython_debug/
 *.xml
 *.iml
 /.idea/easycode.ignore
+*.csv
