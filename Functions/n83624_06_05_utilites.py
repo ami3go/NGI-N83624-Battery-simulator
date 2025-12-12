@@ -1,4 +1,4 @@
-import src.n83624_06_05_class as bat_sim
+import N83624.n83624_06_05_class as bat_sim
 
 
 def set_voltage(s_ch=1, e_ch=18, cell_volt=4.3):
