@@ -10,6 +10,7 @@ import numpy as np
 default_ip_port = "TCPIP0::192.168.0.111::7000::SOCKET"
 default_com = "COM5"
 
+
 class Bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -43,22 +44,24 @@ def range_check(val, min_val, max_val, val_name):
         val = min_val
     return val
 
+
 # n83624_06_05
 
 max_ch_number = 24
-ngi_min_voltage = 0 # 0V for N83624-06-05
-ngi_max_voltage = 6 # 6V for N83624-06-05
-ngi_min_current = 0 # 0A
-ngi_max_current = 5000 # 0A
+ngi_min_voltage = 0  # 0V for N83624-06-05
+ngi_max_voltage = 6  # 6V for N83624-06-05
+ngi_min_current = 0  # 0A
+ngi_max_current = 5000  # 0A
+
 
 class n83624_06_05_class_tcp:
     def __init__(self):
         self.inst = None
         self.cmd = storage()
-        self._s_ch = 1 # operational channels
-        self._e_ch = 24 # operational channels
-        self._s_ch_all = 1 # used in methods with prefix all
-        self._e_ch_all = 24 # used in methods with prefix all
+        self._s_ch = 1  # operational channels
+        self._e_ch = 24  # operational channels
+        self._s_ch_all = 1  # used in methods with prefix all
+        self._e_ch_all = 24  # used in methods with prefix all
         self.key_prefix = "NGI_"  # return a list of NGI1V or NGI1I keys for CSV
         self.key_end_curr = "I"  # prefix for current
         self.key_end_volt = "V"  # prefix for voltage
@@ -81,7 +84,6 @@ class n83624_06_05_class_tcp:
         self._e_ch_all = max_ch
         print(f"**** Connected to: {self.get_idn()} ****")
 
-
     @property
     def working_channels(self):
         return self._s_ch, self._e_ch
@@ -96,8 +98,8 @@ class n83624_06_05_class_tcp:
         """
         if first_last_ch is None:
             first_last_ch = [1, self._e_ch_all]
-        self._s_ch = range_check(int(first_last_ch[0]), 1, max_ch_number, "working_channels. setter" )
-        self._e_ch = range_check(int(first_last_ch[1]), 1, max_ch_number, "working_channels. setter" )
+        self._s_ch = range_check(int(first_last_ch[0]), 1, max_ch_number, "working_channels. setter")
+        self._e_ch = range_check(int(first_last_ch[1]), 1, max_ch_number, "working_channels. setter")
 
     @property
     def send_delay(self):
@@ -155,7 +157,7 @@ class n83624_06_05_class_tcp:
         self.inst.close()
         self.inst = None
 
-    def set_voltage(self,  cell_volt):
+    def set_voltage(self, cell_volt):
         """
         Setting output voltage.
         :param cell_volt: 0V to 6V
@@ -173,8 +175,7 @@ class n83624_06_05_class_tcp:
             cmd_var = self.cmd.source.voltage.ch_num(ch_num, cell_volt)  # Use ch_num directly
             self.send(cmd_var)
 
-
-    def set_current(self, cell_current_mA, start_ch = None, end_ch = None):
+    def set_current(self, cell_current_mA, start_ch=None, end_ch=None):
         if start_ch is None:
             start_ch = self._s_ch
         if end_ch is None:
@@ -198,12 +199,27 @@ class n83624_06_05_class_tcp:
             "high": self.cmd.source.range_high.ch_range(self._s_ch, self._e_ch),
             "auto": auto_cmd,
         }
+        #"Look up value as a key in ranges. If it exists, return it. If not, return auto_cmd instead."
         self.send(ranges.get(value, auto_cmd))
         # set minimum current of 1mA because by default it is 0 when switching ranges
         if value in ["auto", "low"]:
             self.set_current(1)
 
-    def out_on(self, start_ch = None, end_ch = None):
+    def set_sampling_rate(self, value="fast"):
+        """ setting internal adc sampling rate: Fast 10ms, Medium 120ms, Slow 480ms.
+               :param value: "fast", "medium", "slow"
+               :type: vale str
+        """
+        fast = self.cmd.measure.sampling_rate_10ms.ch_range(self._s_ch, self._e_ch)
+        ranges = {
+            "fast": fast,
+            "medium": self.cmd.measure.sampling_rate_120ms.ch_range(self._s_ch, self._e_ch),
+            "slow": self.cmd.measure.sampling_rate_480ms.ch_range(self._s_ch, self._e_ch),
+        }
+        # "Look up value as a key in ranges. If it exists, return it. If not, return auto_cmd instead."
+        self.send(ranges.get(value, fast))
+
+    def out_on(self, start_ch=None, end_ch=None):
         if start_ch is None:
             start_ch = self._s_ch
         if end_ch is None:
@@ -212,7 +228,7 @@ class n83624_06_05_class_tcp:
         cmd_var = self.cmd.output.on.ch_range(start_ch, end_ch)
         self.send(cmd_var)
 
-    def out_off(self, start_ch = None, end_ch = None):
+    def out_off(self, start_ch=None, end_ch=None):
         if start_ch is None:
             start_ch = self._s_ch
         if end_ch is None:
@@ -231,7 +247,7 @@ class n83624_06_05_class_tcp:
         cmd_var = self.cmd.output.off.ch_range(self._s_ch_all, self._e_ch_all)
         self.send(cmd_var)
 
-    def get_voltage(self, ret_as_dict=False, start_ch = None, end_ch = None):
+    def get_voltage(self, ret_as_dict=False, start_ch=None, end_ch=None):
         """
         Read Voltages for pre-defined channels
         :param ret_as_dict: True - return dictionary,
@@ -244,7 +260,7 @@ class n83624_06_05_class_tcp:
             start_ch = self._s_ch
         if end_ch is None:
             end_ch = self._e_ch
-        start_ch = range_check(start_ch, 1, self._e_ch_all, "get_voltage" )
+        start_ch = range_check(start_ch, 1, self._e_ch_all, "get_voltage")
         end_ch = range_check(end_ch, 1, self._e_ch_all, "get_voltage")
         # read voltage, shorted channel will have low voltage
         # print(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
@@ -288,7 +304,6 @@ class n83624_06_05_class_tcp:
     def get_idn(self):
         return self.query(self.cmd.idn.req())
 
-
     #
     # service functions
     #
@@ -299,7 +314,6 @@ class n83624_06_05_class_tcp:
         for i in range(len(txt)):
             array_var.append(round(float(txt[i]), 4))
         return array_var
-
 
     def __array_to_dict(self, array_var, prefix="I"):
         dict_var = {}
@@ -330,8 +344,6 @@ class n83624_06_05_class_tcp:
             voltage_keys.append(v_key)
         return [voltage_keys, current_keys]
 
-
-
     def short_circuit_test(self, cell_volt=4.3):
         """
         This script check connection
@@ -349,7 +361,7 @@ class n83624_06_05_class_tcp:
         # initiate NGI battery simulator via LAN network
         # NGI default IP is 192.168.0.111:7000
         # check ping in OK, in case of any error here
-        cell_volt = range_check(cell_volt, 0.1, 6, "short_circuit_test" )
+        cell_volt = range_check(cell_volt, 0.1, 6, "short_circuit_test")
         s_ch, e_ch = self.working_channels
         error_description = {}
         error_status = False
@@ -388,7 +400,7 @@ class n83624_06_05_class_tcp:
         print(f"{Fore.BLACK}{Back.GREEN} **** CMC cell connection OK{Style.RESET_ALL}")
         return None
 
-    def cmc_set_voltage(self,  all_cell_volt=4.3,  ilim=5000):
+    def cmc_set_voltage(self, all_cell_volt=4.3, ilim=5000):
         s_ch, e_ch = self.working_channels
         ngi_init_list = [
             self.cmd.output.off.ch_range(s_ch, e_ch),
@@ -399,7 +411,7 @@ class n83624_06_05_class_tcp:
             self.cmd.output.on.ch_range(s_ch, e_ch),
 
         ]
-        self.send_list(ngi_init_list,1)
+        self.send_list(ngi_init_list, 1)
 
 
 ###############################################
@@ -450,7 +462,6 @@ class _ch_range:
         return f"{self.prefix}{self.ending} {txt}"
 
 
-
 class ch_str_param(_ch_range):
     def __init__(self, prefix, ending, min_v=0, max_v=6, max_ch=max_ch_number):
         self.prefix = prefix
@@ -459,8 +470,9 @@ class ch_str_param(_ch_range):
         self.ending = ":" + ending
         self.min_val = min_v
         self.max_val = max_v
+
     def ch_num(self, ch_num, param):
-        param = range_check(param,self.min_val, self.max_val, "ch_str_param")
+        param = range_check(param, self.min_val, self.max_val, "ch_str_param")
         ch_num = range_check(ch_num, 1, self.max_ch, "CH selection")
         return f"{self.prefix}{ch_num}{self.ending} {param}"
 
@@ -477,11 +489,10 @@ class req_ch_num():
         self.__range = _ch_range(prefix, ":" + ending + "?", max_ch=max_ch_number)
 
     def ch_num(self, ch_num):
-        return self.__range.ch_range(ch_num , ch_num, "")
+        return self.__range.ch_range(ch_num, ch_num, "")
 
     def ch_range(self, ch_start, ch_end):
         return self.__range.ch_range(ch_start, ch_end, "")
-
 
 
 class str_ch_num():
@@ -492,7 +503,7 @@ class str_ch_num():
         self.__range = _ch_range(prefix, ":" + ending, max_ch=max_ch_number)
 
     def ch_num(self, ch_num):
-        return self.__range.ch_range(ch_num , ch_num, "")
+        return self.__range.ch_range(ch_num, ch_num, "")
 
     def ch_range(self, ch_start, ch_end):
         return self.__range.ch_range(ch_start, ch_end, "")
@@ -503,6 +514,7 @@ class storage:
     Class organize hierarchical Visa command list.
     Methods acts as command constructors with code suggestion if IDE supports it
     """
+
     def __init__(self):
         self.cmd = None
         self.prefix = None
@@ -519,6 +531,7 @@ class storage:
         self.opc = StrAndReq("*OPС")
         self.rst = Str3("*RST")
 
+
 #
 #  Main classes
 #
@@ -534,17 +547,21 @@ class measure:
     # MEAS2:VOLT? //Read the readback voltage for channel 2
     # MEAS2:POW? //Read the real-time power for channel 2
     # MEAS2:TEMP? //Read the real-time temperature for channel 2
+    # MEASure<n>:CAPR <NR1>
 
     def __init__(self):
         # print("INIT Measure")
         self.cmd = "MEAS"
         self.prefix = "MEAS"
-        self.current = req_ch_num(self.prefix, "CURR" )
-        self.voltage = req_ch_num(self.prefix, "VOLT" )
-        self.power = req_ch_num(self.prefix, "POW" )
-        self.temp = req_ch_num(self.prefix, "TEMP" )
+        self.current = req_ch_num(self.prefix, "CURR")
+        self.voltage = req_ch_num(self.prefix, "VOLT")
+        self.power = req_ch_num(self.prefix, "POW")
+        self.temp = req_ch_num(self.prefix, "TEMP")
         self.mah = req_ch_num(self.prefix, "MAH")
         self.resistance = req_ch_num(self.prefix, "R")
+        self.sampling_rate_10ms = str_ch_num(self.prefix, "CAPR 0")
+        self.sampling_rate_120ms = str_ch_num(self.prefix, "CAPR 1")
+        self.sampling_rate_480ms = str_ch_num(self.prefix, "CAPR 2")
 
 
 class output:
@@ -585,7 +602,7 @@ class charge:
         self.voltage = ch_str_param(self.prefix, "VOLT", 0, 6, max_ch_number)
         self.current = ch_str_param(self.prefix, "OUTCURR", 0, 5000, max_ch_number)
         self.current_req = req_ch_num(self.prefix, "OUTCURR")
-        self.resistance = ch_str_param(self.prefix, "R", 0, 100, max_ch_number) # milli ohm
+        self.resistance = ch_str_param(self.prefix, "R", 0, 100, max_ch_number)  # milli ohm
         self.echo_voltages = req_ch_num(self.prefix, "ECHO:VOLT")
         self.echo_capacity = req_ch_num(self.prefix, "ECHO:Q")
 
@@ -638,6 +655,7 @@ class sequence:
         # This command is used to query the running time for the sequence test file.
         self.run_steps_req = req_ch_num(self.prefix, ":RUN:T")
 
+
 #
 # Testing code
 #
@@ -667,15 +685,16 @@ if __name__ == '__main__':
     # print("4: ", bat_sim.query(cmd.measure.voltage.ch_num(1)))
     # print(bat_sim.query(cmd.measure.voltage.ch_ra))
     # bat_sim.close()
-    print(cmd.measure.voltage.ch_num(5))
-    print(cmd.measure.temp.ch_num(10))
-    print(cmd.measure.mah.ch_num(20))
-    print(cmd.output.mode_source.ch_num(10))
-    print(cmd.output.mode_SEQ.ch_num(24))
-    print(cmd.output.mode_req.ch_num(12))
-    print(cmd.output.on.ch_num(6))
-    print(cmd.source.voltage.ch_num(10, 10))
-    print(cmd.source.voltage.ch_num_req(10))
-    print(cmd.source.current.ch_num(25, 500))
-    print(cmd.charge.echo_capacity.ch_num(13))
-    print(cmd.source.voltage.ch_range(1, 1, 5))
+    # print(cmd.measure.voltage.ch_num(5))
+    # print(cmd.measure.temp.ch_num(10))
+    # print(cmd.measure.mah.ch_num(20))
+    # print(cmd.output.mode_source.ch_num(10))
+    # print(cmd.output.mode_SEQ.ch_num(24))
+    # print(cmd.output.mode_req.ch_num(12))
+    # print(cmd.output.on.ch_num(6))
+    # print(cmd.source.voltage.ch_num(10, 10))
+    # print(cmd.source.voltage.ch_num_req(10))
+    # print(cmd.source.current.ch_num(25, 500))
+    # print(cmd.charge.echo_capacity.ch_num(13))
+    # print(cmd.source.voltage.ch_range(1, 1, 5))
+    print(cmd.measure.sampling_rate_10ms.ch_range(1, 16))
