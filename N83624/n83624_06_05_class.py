@@ -76,7 +76,7 @@ class n83624_06_05_class_tcp:
         self.inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, 1)
         # self.inst.write_termination = "\n"
         self.inst.read_termination = '\r\n'
-        self.inst.timeout = 5000  # timeout in ms
+        self.inst.timeout = 5000 # timeout in ms
         self.inst.query_delay = 1  # write/read delay
 
         self.inst.chunk_size = 102400
@@ -145,7 +145,6 @@ class n83624_06_05_class_tcp:
             try:
                 # debug print to check how may tries
                 # print("trying",i)
-
                 return_str = self.inst.query(cmd_str)
                 delay()  # regular delay according to datasheet before next command
                 return return_str
@@ -314,6 +313,28 @@ class n83624_06_05_class_tcp:
     def get_idn(self):
         return self.query(self.cmd.idn.req())
 
+    def fault_simulation(self, value="normal", start_ch=None, end_ch=None):
+        """Current range of internal current sensor: "low" for uA, "high" for mA or auto.
+        "Low" may cause short power loss if device start suddenly consume high current.
+        :param value: "normal", "open_pos", "open_neg", "out_short", "reverse_pol"
+        :type: vale str
+        :param  start_ch - first chanel to apply setting
+        :param  end_ch - last chanel to apply setting
+        """
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
+        normal = self.cmd.fault_simulation.normal.ch_range(start_ch, end_ch)
+        ranges = {
+            "normal": normal,
+            "open_pos": self.cmd.fault_simulation.open_positive.ch_range(start_ch, end_ch),
+            "open_neg": self.cmd.fault_simulation.open_negative.ch_range(start_ch, end_ch),
+            "out_short": self.cmd.fault_simulation.out_short.ch_range(start_ch, end_ch),
+            "reverse_pol": self.cmd.fault_simulation.reverse_polarity.ch_range(start_ch, end_ch)
+        }
+        #"Look up value as a key in ranges. If it exists, return it. If not, return auto_cmd instead."
+        self.send(ranges.get(value, normal))
+
+
+
     #
     # service functions
     #
@@ -354,7 +375,7 @@ class n83624_06_05_class_tcp:
             voltage_keys.append(v_key)
         return [voltage_keys, current_keys]
 
-    def short_circuit_test(self, cell_volt=4.3):
+    def short_circuit_test(self, cell_volt=4.3, start_ch=None, end_ch=None ):
         """
         This script check connection
         It makes following algorithm:
@@ -372,7 +393,7 @@ class n83624_06_05_class_tcp:
         # NGI default IP is 192.168.0.111:7000
         # check ping in OK, in case of any error here
         cell_volt = range_check(cell_volt, 0.1, 6, "short_circuit_test")
-        s_ch, e_ch = self.working_channels
+        s_ch, e_ch = self._resolve_ch_range(start_ch, end_ch)
         error_description = {}
         error_status = False
         # detecting if any short circuit or wrong connection
@@ -540,12 +561,23 @@ class storage:
         self.idn = Req3("*IDN")
         self.opc = StrAndReq("*OPС")
         self.rst = Str3("*RST")
+        self.fault_simulation = flt_sim()
 
 
 #
 #  Main classes
 #
 
+class flt_sim:
+
+    def __init__(self):
+        self.cmd = "FAULt"
+        self.prefix = "FAULt"
+        self.normal = str_ch_num(self.prefix, "SIMUlate 0")
+        self.open_positive = str_ch_num(self.prefix, "SIMUlate 1")
+        self.open_negative = str_ch_num(self.prefix, "SIMUlate 4")
+        self.out_short = str_ch_num(self.prefix, "SIMUlate 8")
+        self.reverse_polarity = str_ch_num(self.prefix, "SIMUlate 96")
 
 class measure:
     # command list :
@@ -707,4 +739,4 @@ if __name__ == '__main__':
     # print(cmd.source.current.ch_num(25, 500))
     # print(cmd.charge.echo_capacity.ch_num(13))
     # print(cmd.source.voltage.ch_range(1, 1, 5))
-    print(cmd.measure.sampling_rate_10ms.ch_range(1, 16))
+    print(cmd.fault_simulation.open_negative.ch_range(1,10))
