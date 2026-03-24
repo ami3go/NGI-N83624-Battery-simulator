@@ -2,7 +2,7 @@ import serial.tools.list_ports
 import serial
 import pyvisa
 import time
-
+import inspect
 from Demos.mmapfile_demo import offset
 from colorama import Back, Style, Fore
 import numpy as np
@@ -158,6 +158,16 @@ class n83624_06_05_class_tcp:
         self.inst.close()
         self.inst = None
 
+    def _resolve_ch_range(self, start_ch, end_ch):
+        caller = inspect.stack()[1].function  # gets the name of the calling method
+        if start_ch is None:
+            start_ch = self._s_ch
+        if end_ch is None:
+            end_ch = self._e_ch
+        start_ch = range_check(int(start_ch), 1, self._e_ch_all, caller)
+        end_ch = range_check(int(end_ch), 1, self._e_ch_all, caller)
+        return start_ch, end_ch
+
     def set_voltage(self, cell_volt):
         """
         Setting output voltage.
@@ -177,23 +187,21 @@ class n83624_06_05_class_tcp:
             self.send(cmd_var)
 
     def set_current(self, cell_current_mA, start_ch=None, end_ch=None):
-        if start_ch is None:
-            start_ch = self._s_ch
-        if end_ch is None:
-            end_ch = self._e_ch
-        start_ch = range_check(start_ch, self._s_ch, self._e_ch_all, "set_current")
-        end_ch = range_check(end_ch, self._s_ch, self._e_ch_all, "set_current")
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
         cell_current_mA = range_check(cell_current_mA, ngi_min_current, ngi_max_current, "set_current")
         cmd_var = self.cmd.source.current.ch_range(start_ch, end_ch, cell_current_mA)
         # print(cmd_var)
         self.send(cmd_var)
 
-    def set_current_range(self, value="auto"):
+    def set_current_range(self, value="auto", start_ch=None, end_ch=None):
         """Current range of internal current sensor: "low" for uA, "high" for mA or auto.
         "Low" may cause short power loss if device start suddenly consume high current.
         :param value: "low", "high", "auto"
         :type: vale str
+        :param  start_ch - first chanel to apply setting
+        :param  end_ch - last chanel to apply setting
         """
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
         auto_cmd = self.cmd.source.range_auto.ch_range(self._s_ch, self._e_ch)
         ranges = {
             "low": self.cmd.source.range_low.ch_range(self._s_ch, self._e_ch),
@@ -206,35 +214,39 @@ class n83624_06_05_class_tcp:
         if value in ["auto", "low"]:
             self.set_current(1)
 
-    def set_sampling_rate(self, value="fast"):
+    def set_sampling_rate(self, value="fast", start_ch=None, end_ch=None):
         """ setting internal adc sampling rate: Fast 10ms, Medium 120ms, Slow 480ms.
                :param value: "fast", "medium", "slow"
                :type: vale str
+               :param  start_ch - first chanel to apply setting
+               :param  end_ch - last chanel to apply setting
         """
-        fast = self.cmd.measure.sampling_rate_10ms.ch_range(self._s_ch, self._e_ch)
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
+        fast = self.cmd.measure.sampling_rate_10ms.ch_range(start_ch, end_ch)
         ranges = {
             "fast": fast,
-            "medium": self.cmd.measure.sampling_rate_120ms.ch_range(self._s_ch, self._e_ch),
-            "slow": self.cmd.measure.sampling_rate_480ms.ch_range(self._s_ch, self._e_ch),
+            "medium": self.cmd.measure.sampling_rate_120ms.ch_range(start_ch, end_ch),
+            "slow": self.cmd.measure.sampling_rate_480ms.ch_range(start_ch, end_ch),
         }
         # "Look up value as a key in ranges. If it exists, return it. If not, return auto_cmd instead."
         self.send(ranges.get(value, fast))
 
     def out_on(self, start_ch=None, end_ch=None):
-        if start_ch is None:
-            start_ch = self._s_ch
-        if end_ch is None:
-            end_ch = self._e_ch
-        """Turn output ON for pre-defined cells"""
+        """  Turn output ON for pre-defined cells
+            :param  start_ch - first chanel to apply setting
+            :param  end_ch - last chanel to apply setting
+        """
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
         cmd_var = self.cmd.output.on.ch_range(start_ch, end_ch)
         self.send(cmd_var)
 
     def out_off(self, start_ch=None, end_ch=None):
-        if start_ch is None:
-            start_ch = self._s_ch
-        if end_ch is None:
-            end_ch = self._e_ch
-        """Turn output OFF for pre-defined cells"""
+        """  Turn output OFF for pre-defined cells
+            :param  start_ch - first chanel to apply setting
+            :param  end_ch - last chanel to apply setting
+        """
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
+
         cmd_var = self.cmd.output.off.ch_range(start_ch, end_ch)
         self.send(cmd_var)
 
@@ -257,12 +269,7 @@ class n83624_06_05_class_tcp:
         :param  end_ch
         :return:  dictionary or array float
         """
-        if start_ch is None:
-            start_ch = self._s_ch
-        if end_ch is None:
-            end_ch = self._e_ch
-        start_ch = range_check(int(start_ch), 1, self._e_ch_all, "get_voltage")
-        end_ch = range_check(int(end_ch), 1, self._e_ch_all, "get_voltage")
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
         # read voltage, shorted channel will have low voltage
         print(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
         txt_val = self.query(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
@@ -272,15 +279,18 @@ class n83624_06_05_class_tcp:
             return_val = self.__array_to_dict(return_val, self.key_end_volt)
         return return_val
 
-    def get_current(self, ret_as_dict=False):
+    def get_current(self, ret_as_dict=False, start_ch=None, end_ch=None):
         """
 
         :param ret_as_dict:
         :return: array dictionary or array float
+        :param  start_ch
+        :param  end_ch
         """
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch)
         # read voltage, shorted channel will have low voltage
         self.inst.query_delay = 4.5  # write/read delay
-        txt_val = self.query(self.cmd.measure.current.ch_range(self._s_ch, self._e_ch))
+        txt_val = self.query(self.cmd.measure.current.ch_range(start_ch, end_ch))
         return_val = self.__txt_array_to_digit_array(self.__txt_to_array(txt_val))
         self.inst.query_delay = 1  # write/read delay
         if ret_as_dict:
