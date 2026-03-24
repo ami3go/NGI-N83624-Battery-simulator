@@ -100,7 +100,7 @@ class n83624_06_05_class_tcp:
             first_last_ch = [1, self._e_ch_all]
         self._s_ch = range_check(int(first_last_ch[0]), 1, max_ch_number, "working_channels. setter")
         self._e_ch = range_check(int(first_last_ch[1]), 1, max_ch_number, "working_channels. setter")
-
+        print(self._s_ch, self._e_ch)
     @property
     def send_delay(self):
         return self._send_delay
@@ -140,6 +140,7 @@ class n83624_06_05_class_tcp:
         :return: VISA string replay
         """
         return_str = ""
+        print("Query:", cmd_str)
         for i in range(100):
             try:
                 # debug print to check how may tries
@@ -260,12 +261,11 @@ class n83624_06_05_class_tcp:
             start_ch = self._s_ch
         if end_ch is None:
             end_ch = self._e_ch
-        start_ch = range_check(start_ch, 1, self._e_ch_all, "get_voltage")
-        end_ch = range_check(end_ch, 1, self._e_ch_all, "get_voltage")
+        start_ch = range_check(int(start_ch), 1, self._e_ch_all, "get_voltage")
+        end_ch = range_check(int(end_ch), 1, self._e_ch_all, "get_voltage")
         # read voltage, shorted channel will have low voltage
-        # print(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
+        print(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
         txt_val = self.query(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
-
         return_val = self.__txt_array_to_digit_array(self.__txt_to_array(txt_val))
 
         if ret_as_dict:
