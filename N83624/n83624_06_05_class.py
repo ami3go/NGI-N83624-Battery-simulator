@@ -100,7 +100,7 @@ class n83624_06_05_class_tcp:
             first_last_ch = [1, self._e_ch_all]
         self._s_ch = range_check(int(first_last_ch[0]), 1, max_ch_number, "working_channels. setter")
         self._e_ch = range_check(int(first_last_ch[1]), 1, max_ch_number, "working_channels. setter")
-        print(self._s_ch, self._e_ch)
+        # print(self._s_ch, self._e_ch)
     @property
     def send_delay(self):
         return self._send_delay
@@ -140,7 +140,8 @@ class n83624_06_05_class_tcp:
         :return: VISA string replay
         """
         return_str = ""
-        print("Query:", cmd_str)
+        # print("Query:", cmd_str)
+        # print(self.inst.query(self.cmd.opc.req()))
         for i in range(100):
             try:
                 # debug print to check how may tries

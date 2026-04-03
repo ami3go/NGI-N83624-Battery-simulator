@@ -15,6 +15,6 @@ inst.timeout = 5000  # timeout in ms
 inst.query_delay = 1  # write/read delay
 
 inst.chunk_size = 102400
-print(f"**** Connected to: {inst.query("*IDN?")} ****")
-
+# print(f"**** Connected to: {inst.query('*IDN?')} ****")
+print(inst.send('FAULt:SIMUlate 1 (@1)'))
 
