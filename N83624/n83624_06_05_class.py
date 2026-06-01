@@ -110,7 +110,7 @@ class n83624_06_05_class_tcp:
     def send_delay(self, delay_val_sec):
         if isinstance(delay_val_sec, (int, float)) and delay_val_sec >= 0:
             var = range_check(delay_val_sec, 0.001, 2, "NGI send_delay")
-            self._send_delay = delay
+            self._send_delay = var
         else:
             raise ValueError("send_delay must be a non-negative number.")
 
@@ -252,7 +252,7 @@ class n83624_06_05_class_tcp:
 
     def out_on_all(self):
         """ Turn output of all channels ON"""
-        cmd_var = self.cmd.output.off.ch_range(self._s_ch_all, self._e_ch_all)
+        cmd_var = self.cmd.output.on.ch_range(self._s_ch_all, self._e_ch_all)
         self.send(cmd_var)
 
     def out_off_all(self):
@@ -303,13 +303,13 @@ class n83624_06_05_class_tcp:
         for i in range(n_samples):
             i_cells_array.append(self.get_current())
             time.sleep(delay)
-        np_array = np.mean(np.array(i_cells_array))
 
+        # np_array = np.mean(np.array(i_cells_array))
+        avg = np.mean(np.array(i_cells_array), axis=0).tolist()
         if ret_as_dict:
-            return_val = self.__array_to_dict(return_val, self.key_end_curr)
-        else:
-            return_val = np_array.tolist()
-        return return_val
+            return self.__array_to_dict(avg, self.key_end_curr)
+
+        return avg
 
     def get_idn(self):
         return self.query(self.cmd.idn.req())
@@ -414,8 +414,7 @@ class n83624_06_05_class_tcp:
             key = f"CH{i + 1}"
             if volt >= (cell_volt - 0.1):
                 error_description[key] = f"OK , VOLT: {volt}"
-            if volt <= (cell_volt - 0.3):
-                error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
+            try:              error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
                 error_status = True
 
         if error_status:
