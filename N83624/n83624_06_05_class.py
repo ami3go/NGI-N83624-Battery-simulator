@@ -3,7 +3,6 @@ import serial
 import pyvisa
 import time
 import inspect
-from Demos.mmapfile_demo import offset
 from colorama import Back, Style, Fore
 import numpy as np
 
