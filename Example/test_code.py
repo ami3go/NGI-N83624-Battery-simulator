@@ -7,7 +7,6 @@
 #         print(z + start_ch, cell_volt)
 #
 # set_voltage_from_array([10,5,6,7,8,9,0], 20)
-from bms_browser_scripts.SimpleScripts.ADBMS6842_multiple_init import cell_volt
 
 cell_volt=[0]*16
 names = []
