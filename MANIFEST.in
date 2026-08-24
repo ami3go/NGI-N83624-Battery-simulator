@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include SOFTWARE_GENERATION_TASK.md
+recursive-include Docs/Driver *.md
+recursive-include Example *.py *.csv
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
