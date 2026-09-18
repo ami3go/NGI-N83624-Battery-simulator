@@ -43,6 +43,18 @@
 - `scpi-driver-core` is now a public repository, so `ci.yml`'s
   `SCPI_DRIVER_CORE_TOKEN` authentication step (needed while it was
   private) has been removed as dead weight.
+- `Docs/Driver/software_architecture.md` and `packaging.md` rewritten to
+  describe the actual current dual-path architecture (legacy + new driver)
+  - both predated the migration and still described the new driver as a
+    future task after it had already shipped.
+- `requirements.txt` was missing `scpi-driver-core` entirely; added.
+- `MANIFEST.in` now includes `scripts/*.py` in the sdist (it previously
+  covered `Example/` but not the new `scripts/` directory).
+- README's separate "Software architecture map" diagram updated to show
+  both paths - it had gone stale relative to the "Migration to
+  scpi-driver-core" section above it in the same file. Production note and
+  Documentation section updated to reference the new driver's unvalidated
+  status and `scripts/validate_hardware.py`.
 
 ### Fixed
 

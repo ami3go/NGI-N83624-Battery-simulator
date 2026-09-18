@@ -115,25 +115,32 @@ pyproject.toml               Build metadata and dependencies
 
 ```mermaid
 flowchart TB
-    USER[User scripts / test framework] --> WRAP[ngi_n83624 public wrapper]
+    USER[User scripts / test framework]
+    USER --> WRAP[ngi_n83624 legacy wrapper]
     WRAP --> TCP[N83624.n83624_06_05_class_tcp]
     WRAP --> SER[N83624.n83624_06_05_class serial class]
-    TCP --> VISA[PyVISA TCPIP socket resource]
+    TCP --> VISA[Direct PyVISA calls]
     SER --> PYSERIAL[pyserial RS232 link]
+    USER --> DRIVER[ngi_n83624.driver.N83624Driver<br/>new, TCP only]
+    DRIVER --> CORE[scpi-driver-core<br/>ScpiSession / ScpiClient / VisaTransport]
     VISA --> HW[NGI N83624 simulator]
     PYSERIAL --> HW
+    CORE --> HW
     HW --> DUT[DUT / BMS / test bench]
-    DOCS[Docs and vendor manuals] --> USER
-    TESTS[pytest import tests] --> WRAP
 ```
 
-The current installable package is a compatibility wrapper around the existing repository code. The legacy driver code remains in `N83624/` to avoid breaking existing scripts.
+Two independent paths, not one refactored into the other — see
+[Migration to scpi-driver-core](#migration-to-scpi-driver-core) above and
+[Docs/Driver/software_architecture.md](Docs/Driver/software_architecture.md) for the full
+picture, including what the new path replaces and why. The legacy driver code in
+`N83624/` is unmodified either way, to avoid breaking existing scripts.
 
 ## Documentation
 
 - [Packaging guide](Docs/Driver/packaging.md)
 - [Software architecture](Docs/Driver/software_architecture.md)
 - [Software generation/support task](SOFTWARE_GENERATION_TASK.md)
+- [Hardware validation script](scripts/validate_hardware.py) for the new driver
 - Vendor SCPI manual: `Docs/Programming Guide/N83624 Series Programming Guide-SCPI V20240130.pdf`
 
 ## Runtime dependencies
@@ -150,7 +157,13 @@ Example scripts may require additional packages depending on the workflow.
 
 ## Production note
 
-The current packaged API exposes the existing legacy driver. Before 24/7 production use, validate communication, safety limits, output-off behavior, fault handling, and long-duration stability on the exact instrument model and firmware used in the test bench.
+Before 24/7 production use, validate communication, safety limits, output-off behavior,
+fault handling, and long-duration stability on the exact instrument model and firmware
+used in the test bench — for either driver path.
+
+The new `ngi_n83624.driver.N83624Driver` path in particular has not been run against
+real hardware at all yet; run [`scripts/validate_hardware.py`](scripts/validate_hardware.py)
+against the instrument before relying on it for anything.
 
 ## License
 
