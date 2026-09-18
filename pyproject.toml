@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ngi-n83624-battery-simulator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Installable Python support package for NGI N83624 battery simulator scripts"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,6 +31,7 @@ dependencies = [
     "numpy>=1.23",
     "pyserial>=3.5",
     "pyvisa>=1.14",
+    "scpi-driver-core[visa] @ git+https://github.com/ami3go/scpi-driver-core.git@241d4b6a287bda7a957a9bd8e4c640c7e50f3764",
 ]
 
 [project.optional-dependencies]
