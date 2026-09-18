@@ -150,6 +150,13 @@ def test_get_voltage_parses_the_csv_reply() -> None:
     assert transport.written == b"MEAS:VOLT? (@1,2,3)\n"
 
 
+def test_get_voltage_rounds_to_four_decimal_places() -> None:
+    """Regression test: matches the legacy driver's __txt_to_array rounding."""
+    driver, transport = make()
+    transport.feed(b"3.29812345,3.2\n")
+    assert driver.get_voltage(start_ch=1, end_ch=2) == [3.2981, 3.2]
+
+
 def test_get_voltage_as_dict_uses_the_key_prefix() -> None:
     driver, transport = make()
     transport.feed(b"3.701,3.698\n")
@@ -306,6 +313,31 @@ def test_get_current_avr_clamps_n_samples_below_the_minimum() -> None:
     assert driver.get_current_avr(n_samples=1, delay=0) == [150.0]
 
 
+def test_get_current_avr_inter_sample_delay_uses_the_injected_sleep() -> None:
+    """Regression test: the inter-sample delay must go through self._sleep, not time.sleep.
+
+    Otherwise a driver constructed with a fake sleep for testability (like
+    make()'s) would still block for real between samples.
+    """
+    transport = MockTransport()
+    transport.open()
+    session = ScpiSession("ngi_n83624", ScpiClient(transport))
+    slept: list[float] = []
+    driver = N83624Driver(
+        session,
+        query_retry_policy=FAST_RETRY_POLICY,
+        current_settle_s=0.0,
+        sleep=slept.append,
+    )
+    driver.working_channels = [1, 1]
+    transport.feed(b"100.0\n")
+    transport.feed(b"200.0\n")
+    driver.get_current_avr(n_samples=2, delay=1.5)
+    # One settle-delay call per sample (current_settle_s=0.0) plus one
+    # inter-sample delay per sample (delay=1.5); both go through self._sleep.
+    assert slept.count(1.5) == 2
+
+
 def test_close_closes_the_session() -> None:
     driver, transport = make()
     driver.close()
@@ -365,6 +397,24 @@ def test_set_communication_timeout_rejects_a_non_positive_value() -> None:
     driver, _ = make()
     with pytest.raises(ConfigurationError):
         driver.set_communication_timeout(-1)
+
+
+def test_set_communication_timeout_actually_governs_writes() -> None:
+    """Regression test: the timeout used to be set-but-never-read by _write/_query."""
+    driver, transport = make()
+    driver.set_communication_timeout(12.5)
+    driver.out_on(1, 1)
+    write_ops = [op for op in transport.operations if op.kind == "write"]
+    assert write_ops[-1].timeout_s == 12.5
+
+
+def test_set_communication_timeout_actually_governs_queries() -> None:
+    driver, transport = make()
+    driver.set_communication_timeout(12.5)
+    transport.feed(b"3.7\n")
+    driver.get_voltage(start_ch=1, end_ch=1)
+    read_ops = [op for op in transport.operations if op.kind == "read"]
+    assert read_ops[-1].timeout_s == 12.5
 
 
 # -- connect_tcp / _finish_connecting ----------------------------------------

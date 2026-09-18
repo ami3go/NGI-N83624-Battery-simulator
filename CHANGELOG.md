@@ -18,9 +18,8 @@
   implements. Not full LPDS-002 compliance - `connect()`/`disconnect()` as
   canonical instance methods, naming aliases, and risk-level metadata are
   deliberately out of scope for this pass.
-- Exhaustive unit test coverage: every `storage()` command path (including a
-  characterization test for `*OPС`'s Cyrillic С vs. the real `*OPC`) and
-  every `N83624Driver` public method.
+- Exhaustive unit test coverage: every `storage()` command path and every
+  `N83624Driver` public method.
 
 ### Fixed
 
@@ -39,6 +38,26 @@
   command from `working_channels` instead, silently ignoring explicit
   channel arguments. Carried over from the same bug in the legacy driver;
   fixed here (legacy file left untouched, per the compatibility requirement).
+- `storage.opc` was built from `"*OPС"` with a Cyrillic С (U+0421), not the
+  real IEEE-488.2 `*OPC` - the driver had never actually sent a real
+  `*OPC`/`*OPC?` to the instrument.
+- `_ch_range.ch_range()` (every channel-range command) silently built a
+  malformed, no-channel command (e.g. `"MEAS:VOLT? (@)"`) instead of raising
+  when `ch_start > ch_end`, since `range(10, 3)` is empty. Now raises
+  `ValueError`.
+- `_query_csv_floats()` dropped the legacy driver's rounding of measurement
+  values to 4 decimal places, silently changing the precision of
+  `get_voltage`/`get_current`/`get_current_avr` results. Restored.
+- `get_current_avr()`'s inter-sample delay used `time.sleep()` directly
+  instead of the injectable `self._sleep` hook `current_settle_s` uses,
+  making the sleep-injection design inconsistent (a driver constructed with
+  a fake `sleep` for testability still blocked for real between samples).
+- `set_communication_timeout()`/`get_communication_timeout()` didn't
+  actually govern the timeout used by the driver's own writes and queries,
+  and the getter's fallback was a hardcoded constant disconnected from the
+  real transport timeout `connect_tcp` configured. `_write`/`_query` now
+  apply `session.communication_timeout_s`, and `connect_tcp` populates it
+  from its own `timeout_s` argument.
 
 ## 0.1.0 - 2026-08-24
 

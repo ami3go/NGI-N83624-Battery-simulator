@@ -131,6 +131,10 @@ class N83624Driver:
         codec = ScpiTextCodec(response_terminator=None)
         client = ScpiClient(transport, codec=codec, minimum_interval_s=minimum_interval_s)
         session = ScpiSession("ngi_n83624", client)
+        # So get_communication_timeout() reports the real transport timeout,
+        # and so set_communication_timeout() has something meaningful to
+        # override later - see _write/_query, which now apply this value.
+        session.set_communication_timeout(timeout_s)
         session.open()
         return cls._finish_connecting(
             session,
@@ -213,7 +217,12 @@ class N83624Driver:
         return self.session.get_identity(refresh=refresh).raw
 
     def set_communication_timeout(self, timeout_s: float, alias: str | None = None) -> float:
-        """Set the session's communication timeout and return the effective value.
+        """Set the timeout applied to this driver's own writes and queries.
+
+        Takes effect starting with the next call to any command/query method
+        - see :meth:`_write`/:meth:`_query`. ``connect_tcp`` already populates
+        this from its own ``timeout_s`` argument, so it reflects the real
+        transport timeout unless overridden here afterward.
 
         Raises:
             ConfigurationError: if ``timeout_s`` is not finite and positive.
@@ -223,10 +232,11 @@ class N83624Driver:
         return timeout_s
 
     def get_communication_timeout(self, alias: str | None = None) -> float:
-        """The effective communication timeout in seconds.
+        """The timeout applied to this driver's own writes and queries, in seconds.
 
-        Falls back to :data:`DEFAULT_COMMUNICATION_TIMEOUT_S` if
-        :meth:`set_communication_timeout` was never called.
+        Falls back to :data:`DEFAULT_COMMUNICATION_TIMEOUT_S` only for a
+        driver constructed directly (bypassing ``connect_tcp``) that never
+        called :meth:`set_communication_timeout` either.
         """
         del alias
         timeout_s = self.session.communication_timeout_s
@@ -247,18 +257,22 @@ class N83624Driver:
     # -- transport plumbing -------------------------------------------------
 
     def _write(self, cmd: str) -> None:
-        self.client.write(cmd)
+        self.client.write(cmd, timeout_s=self.session.communication_timeout_s)
 
     def _query(self, cmd: str) -> str:
         return self.client.query(
             cmd,
+            timeout_s=self.session.communication_timeout_s,
             replay_policy=ReplayPolicy.SAFE,
             retry_policy=self._query_retry_policy,
             before_retry=self.session.recover_if_faulted,
         )
 
     def _query_csv_floats(self, cmd: str) -> list[float]:
-        return parse_csv_floats(self._query(cmd))
+        # Rounded to match the legacy driver's __txt_to_array, so a script
+        # comparing/logging exact measurement values sees the same precision
+        # as before the migration.
+        return [round(value, 4) for value in parse_csv_floats(self._query(cmd))]
 
     def _resolve_ch_range(self, start_ch, end_ch, caller: str):
         if start_ch is None:
@@ -371,7 +385,7 @@ class N83624Driver:
         i_cells_array = []
         for _ in range(n_samples):
             i_cells_array.append(self.get_current())
-            time.sleep(delay)
+            self._sleep(delay)
 
         avg = np.mean(np.array(i_cells_array), axis=0).tolist()
         if ret_as_dict:

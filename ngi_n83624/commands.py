@@ -66,6 +66,10 @@ class _ch_range:
     def ch_range(self, ch_start, ch_end, param):
         ch_start = range_check(ch_start, 1, self.max_ch, "CH selection range")
         ch_end = range_check(ch_end, 1, self.max_ch, "CH selection range")
+        if ch_start > ch_end:
+            raise ValueError(
+                f"CH selection range: start channel {ch_start} is after end channel {ch_end}"
+            )
         txt = ""
         for k in range(ch_start, ch_end + 1):
             txt = txt + f"{k},"
@@ -246,6 +250,6 @@ class storage:
         self.output = output()
         self.measure = measure()
         self.idn = Req3("*IDN")
-        self.opc = StrAndReq("*OPС")
+        self.opc = StrAndReq("*OPC")
         self.rst = Str3("*RST")
         self.fault_simulation = flt_sim()

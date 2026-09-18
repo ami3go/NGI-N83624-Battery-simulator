@@ -4,9 +4,9 @@ No transport, no hardware: these classes only build strings. Covers every
 command exposed by ``storage()`` so a change to any SCPI string - accidental
 or intentional - is caught here rather than discovered against real
 hardware. Expected strings were captured from the actual implementation
-(not hand-derived), then reviewed - see test_opc_uses_a_cyrillic_c_not_latin_c
-for a discrepancy found this way and deliberately preserved as a documented
-characterization rather than silently "corrected".
+(not hand-derived); this process found a real bug (a Cyrillic character in
+the ``*OPC`` command) since fixed - see
+test_opc_uses_real_latin_c_not_a_cyrillic_lookalike.
 """
 
 import pytest
@@ -31,6 +31,24 @@ def test_range_check_clamps_above_max() -> None:
 
 def test_range_check_clamps_below_min() -> None:
     assert range_check(-1, 0, 6, "voltage") == 0
+
+
+# -- _ch_range.ch_range channel ordering ------------------------------------
+
+
+def test_ch_range_rejects_a_reversed_channel_range() -> None:
+    """Regression test: start > end used to silently build an empty channel list.
+
+    ``range(10, 3)`` is empty, so the old code produced "MEAS:VOLT? (@)" - a
+    malformed, no-channel query sent to the instrument with no error raised.
+    """
+    with pytest.raises(ValueError, match="start channel 10 is after end channel 2"):
+        cmd().measure.voltage.ch_range(10, 2)
+
+
+def test_ch_range_allows_a_single_channel_range() -> None:
+    """start == end is not a reversed range and must still work."""
+    assert cmd().measure.voltage.ch_range(5, 5) == "MEAS:VOLT? (@5)"
 
 
 # -- measure --------------------------------------------------------------
@@ -205,23 +223,19 @@ def test_idn_query() -> None:
 
 
 def test_opc_req() -> None:
-    assert cmd().opc.req() == "*OPС?"
+    assert cmd().opc.req() == "*OPC?"
 
 
-def test_opc_uses_a_cyrillic_c_not_latin_c() -> None:
-    """Characterizes a likely-unintentional bug rather than silently fixing it.
+def test_opc_uses_real_latin_c_not_a_cyrillic_lookalike() -> None:
+    """Regression test for a fixed bug: storage.opc was built from "*OPС" with
 
-    The real IEEE-488.2 "Operation Complete" command is ``*OPC``. The prefix
-    here is built with a Cyrillic С (U+0421, visually identical to Latin C)
-    instead: ``storage.__init__`` has ``self.opc = StrAndReq("*OPС")``.
-    Byte-for-byte, this means the driver has never actually sent a real
-    ``*OPC``/``*OPC?`` to the instrument - worth a decision on whether to fix
-    it, since real hardware almost certainly doesn't recognize this string.
+    a Cyrillic С (U+0421, visually identical to Latin C) instead of the real
+    IEEE-488.2 "Operation Complete" command. Byte-for-byte, that meant the
+    driver never actually sent a real ``*OPC``/``*OPC?`` to the instrument.
     """
     s = cmd().opc.str()
-    assert s == "*OPС"
-    assert s != "*OPC"
-    assert ord(s[-1]) == 0x421  # Cyrillic Es (С), not U+0043 Latin C
+    assert s == "*OPC"
+    assert ord(s[-1]) == 0x43  # Latin C, not U+0421 Cyrillic Es (С)
 
 
 def test_rst_str() -> None:
