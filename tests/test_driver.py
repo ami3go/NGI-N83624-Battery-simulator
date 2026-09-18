@@ -6,7 +6,7 @@ the real VISA connection.
 
 import pytest
 from scpi_driver_core import ScpiClient, ScpiSession
-from scpi_driver_core.exceptions import TransportTimeoutError
+from scpi_driver_core.exceptions import ConfigurationError, TransportTimeoutError
 from scpi_driver_core.execution.retry import RetryPolicy
 from scpi_driver_core.transport import MockTransport, TransportState
 
@@ -310,6 +310,61 @@ def test_close_closes_the_session() -> None:
     driver, transport = make()
     driver.close()
     assert transport.state is TransportState.CLOSED
+
+
+# -- LPDS-002 connection-lifecycle methods -----------------------------------
+
+
+def test_is_connected_reflects_transport_state_without_io() -> None:
+    driver, transport = make()
+    assert driver.is_connected() is True
+    transport.close()
+    assert driver.is_connected() is False
+
+
+def test_check_communication_returns_true_on_a_successful_probe() -> None:
+    driver, transport = make()
+    transport.feed(b"NGI,N83624-06-05,SN123,1.0\n")
+    assert driver.check_communication() is True
+
+
+def test_check_communication_returns_false_rather_than_raising_on_failure() -> None:
+    driver, _ = make()
+    # No reply fed, and the query never retries with FAST_RETRY_POLICY's
+    # driver-level policy since check_communication uses the session's own
+    # health query, not N83624Driver's query path - it still must not raise.
+    assert driver.check_communication() is False
+
+
+def test_get_identity_returns_the_raw_idn_reply() -> None:
+    driver, transport = make()
+    transport.feed(b"NGI,N83624-06-05,SN123,1.0\n")
+    assert driver.get_identity() == "NGI,N83624-06-05,SN123,1.0"
+
+
+def test_get_identity_refresh_false_uses_the_cached_value() -> None:
+    driver, transport = make()
+    transport.feed(b"NGI,N83624-06-05,SN123,1.0\n")
+    driver.get_identity()  # populates the session's identity cache
+    # No further data fed; a second real query here would hang/fail.
+    assert driver.get_identity(refresh=False) == "NGI,N83624-06-05,SN123,1.0"
+
+
+def test_get_communication_timeout_defaults_when_never_set() -> None:
+    driver, _ = make()
+    assert driver.get_communication_timeout() == 5.0
+
+
+def test_set_communication_timeout_returns_and_applies_the_value() -> None:
+    driver, _ = make()
+    assert driver.set_communication_timeout(2.5) == 2.5
+    assert driver.get_communication_timeout() == 2.5
+
+
+def test_set_communication_timeout_rejects_a_non_positive_value() -> None:
+    driver, _ = make()
+    with pytest.raises(ConfigurationError):
+        driver.set_communication_timeout(-1)
 
 
 # -- connect_tcp / _finish_connecting ----------------------------------------

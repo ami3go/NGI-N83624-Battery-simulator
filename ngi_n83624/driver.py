@@ -40,6 +40,10 @@ from ngi_n83624.commands import (
 
 DEFAULT_IP_PORT = "TCPIP0::192.168.0.111::7000::SOCKET"
 
+# connect_tcp's own default transport timeout_s; used as get_communication_timeout()'s
+# fallback when set_communication_timeout() was never called.
+DEFAULT_COMMUNICATION_TIMEOUT_S = 5.0
+
 # The NGI firmware occasionally needs several seconds to answer a query; the
 # original driver retried a query up to 100 times with a flat 5s wait
 # (N83624/n83624_06_05_class.py, pre-migration). Reproduced exactly rather
@@ -168,6 +172,65 @@ class N83624Driver:
 
     def close(self) -> None:
         self.session.close()
+
+    # -- LPDS-002 connection-lifecycle methods -------------------------------
+    #
+    # A minimal set of the mandatory universal methods LPDS-002
+    # (https://github.com/ami3go/Lab-equipment-pyDrivers) defines, added as
+    # thin wrappers around behavior ScpiSession already implements. Not a
+    # full LPDS-002 pass: connect()/disconnect() as canonical instance
+    # methods would mean redesigning construction around them instead of
+    # connect_tcp()'s classmethod-factory pattern, and naming aliases
+    # (e.g. enable_output for out_on) are left for a later pass.
+
+    def is_connected(self, alias: str | None = None) -> bool:
+        """Whether the transport holds its resource.
+
+        Never performs device I/O, so it cannot block and isn't evidence the
+        instrument is actually responding - use :meth:`check_communication`
+        for that. ``alias`` is accepted for LPDS-002 signature compatibility;
+        this driver manages a single session.
+        """
+        del alias
+        return self.session.is_connected
+
+    def check_communication(self, alias: str | None = None) -> bool:
+        """Ask the instrument whether it's there, via a bounded, non-destructive query.
+
+        Returns ``False`` on failure rather than raising - see
+        :attr:`ScpiSession.health` for the reason.
+        """
+        del alias
+        return self.session.check_communication()
+
+    def get_identity(self, alias: str | None = None, refresh: bool = True) -> str:
+        """A stable, human-readable identity string (the raw ``*IDN?`` reply).
+
+        Cached by the session after the first query; pass ``refresh=True``
+        (the default) to force a fresh query.
+        """
+        del alias
+        return self.session.get_identity(refresh=refresh).raw
+
+    def set_communication_timeout(self, timeout_s: float, alias: str | None = None) -> float:
+        """Set the session's communication timeout and return the effective value.
+
+        Raises:
+            ConfigurationError: if ``timeout_s`` is not finite and positive.
+        """
+        del alias
+        self.session.set_communication_timeout(timeout_s)
+        return timeout_s
+
+    def get_communication_timeout(self, alias: str | None = None) -> float:
+        """The effective communication timeout in seconds.
+
+        Falls back to :data:`DEFAULT_COMMUNICATION_TIMEOUT_S` if
+        :meth:`set_communication_timeout` was never called.
+        """
+        del alias
+        timeout_s = self.session.communication_timeout_s
+        return DEFAULT_COMMUNICATION_TIMEOUT_S if timeout_s is None else timeout_s
 
     @property
     def working_channels(self):

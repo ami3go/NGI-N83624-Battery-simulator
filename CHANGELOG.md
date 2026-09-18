@@ -11,6 +11,16 @@
   TCP core primitives (voltage/current/output/measurement) with unit tests
   against a simulated transport, including transport-fault recovery on retry.
 - `scpi-driver-core` as a runtime dependency (installed from GitHub).
+- `N83624Driver.is_connected`, `check_communication`, `get_identity`,
+  `set_communication_timeout`, `get_communication_timeout`: a first, bounded
+  pass toward the [Lab-equipment-pyDrivers LPDS-002](https://github.com/ami3go/Lab-equipment-pyDrivers/blob/main/AI_Guides/LPDS-002_Mandatory_Public_API_Standard.md)
+  mandatory public API standard, wrapping behavior `ScpiSession` already
+  implements. Not full LPDS-002 compliance - `connect()`/`disconnect()` as
+  canonical instance methods, naming aliases, and risk-level metadata are
+  deliberately out of scope for this pass.
+- Exhaustive unit test coverage: every `storage()` command path (including a
+  characterization test for `*OPС`'s Cyrillic С vs. the real `*OPC`) and
+  every `N83624Driver` public method.
 
 ### Fixed
 
