@@ -30,6 +30,13 @@
   budget. Opt-in via `sync_before_current=True`; off by default so
   `get_current()`'s legacy-matched sleep behavior doesn't change until real
   hardware confirms OPC-based sync is actually reliable on this instrument.
+- `scripts/validate_hardware.py`: a real-hardware validation script for
+  everything the new driver hasn't been checked against yet - `*OPC?`
+  support, whether the 100-attempt/5s query retry and 4.5s current-settle
+  delay are actually needed, and basic connect/read/output round trips.
+  Read-only by default; `--output` is required to run anything that changes
+  output state, scoped to one configurable channel with a warning pause
+  before touching it.
 
 ### Changed
 

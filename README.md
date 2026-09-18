@@ -79,6 +79,21 @@ legacy `ngi_n83624` wrapper — both keep working exactly as before.
   `cmc_set_voltage` (bench-specific test sequences) are intentionally not ported — they belong
   in an adapter layered on top of the driver, not the driver itself.
 
+None of this has been validated against real hardware yet — every timing constant
+(`QUERY_RETRY_POLICY`, `CURRENT_QUERY_SETTLE_S`, `OPC_RETRY_POLICY`) and the `*OPC?`-based
+sync path (`wait_for_completion()`) are simulated-transport-only so far. Run
+[`scripts/validate_hardware.py`](scripts/validate_hardware.py) against the real instrument to
+check them:
+
+```bash
+python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET          # read-only
+python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET --output # also drives output
+```
+
+Read-only by default; `--output` is required to run anything that changes output state
+(`set_voltage`/`set_current`/`out_on`/`out_off`), and is scoped to one configurable channel with
+a 3-second pause (and a loud warning) before touching it.
+
 ## Repository layout
 
 ```text
@@ -87,6 +102,7 @@ Functions/                   Original helper functions
 ngi_n83624/                  Installable wrapper package / public import surface
 ngi_n83624/commands.py       SCPI command-string builders (transport-agnostic)
 ngi_n83624/driver.py         New TCP driver built on scpi-driver-core (migration in progress)
+scripts/validate_hardware.py Real-hardware validation for the new driver's unvalidated assumptions
 Example/                     Existing usage examples
 Docs/Programming Guide/      Vendor programming manuals
 Docs/User Manual/            Vendor user manuals
