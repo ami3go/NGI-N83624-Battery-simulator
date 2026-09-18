@@ -51,12 +51,42 @@ if ngi.init_ser("COM5", max_ch=24):
     ngi.close()
 ```
 
+New TCP driver, built on [`scpi-driver-core`](https://github.com/ami3go/scpi-driver-core) (migration in progress — see below):
+
+```python
+from ngi_n83624.driver import N83624Driver
+
+ngi = N83624Driver.connect_tcp("TCPIP0::192.168.0.111::7000::SOCKET", max_ch=24)
+ngi.set_voltage(3.7)
+ngi.out_on()
+print(ngi.get_voltage())
+ngi.close()
+```
+
+## Migration to scpi-driver-core
+
+`ngi_n83624/driver.py` (`N83624Driver`) is a parallel, in-progress reimplementation of the
+TCP path on top of the shared [`scpi-driver-core`](https://github.com/ami3go/scpi-driver-core)
+package, replacing direct PyVISA calls with `ScpiSession`/`ScpiClient`, and the fragile
+100-attempt query retry loop with `scpi_driver_core`'s `RetryPolicy` plus automatic
+transport-fault recovery. It does not touch or replace `N83624/n83624_06_05_class.py` or the
+legacy `ngi_n83624` wrapper — both keep working exactly as before.
+
+- `ngi_n83624/commands.py` — the SCPI command-string builders, ported unchanged (transport-agnostic,
+  fully unit-tested without hardware).
+- `ngi_n83624/driver.py` — the new driver class, covering the TCP core primitives
+  (voltage/current/output/measurement). Serial is not migrated yet. `short_circuit_test` and
+  `cmc_set_voltage` (bench-specific test sequences) are intentionally not ported — they belong
+  in an adapter layered on top of the driver, not the driver itself.
+
 ## Repository layout
 
 ```text
 N83624/                      Original N83624 driver classes
 Functions/                   Original helper functions
 ngi_n83624/                  Installable wrapper package / public import surface
+ngi_n83624/commands.py       SCPI command-string builders (transport-agnostic)
+ngi_n83624/driver.py         New TCP driver built on scpi-driver-core (migration in progress)
 Example/                     Existing usage examples
 Docs/Programming Guide/      Vendor programming manuals
 Docs/User Manual/            Vendor user manuals
@@ -98,6 +128,7 @@ The installable module declares these runtime dependencies:
 - `pyvisa`
 - `colorama`
 - `numpy`
+- [`scpi-driver-core`](https://github.com/ami3go/scpi-driver-core) (installed from GitHub; used by the new `ngi_n83624.driver` module)
 
 Example scripts may require additional packages depending on the workflow.
 
