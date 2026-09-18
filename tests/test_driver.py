@@ -84,6 +84,19 @@ def test_out_on_writes_the_channel_range() -> None:
     assert transport.written == b"OUTP:ONOFF 1 (@1,2,3)\n"
 
 
+def test_out_off_writes_the_channel_range() -> None:
+    driver, transport = make()
+    driver.out_off(1, 3)
+    assert transport.written == b"OUTP:ONOFF 0 (@1,2,3)\n"
+
+
+def test_out_on_all_uses_the_full_channel_range() -> None:
+    driver, transport = make()
+    driver.out_on_all()
+    all_channels = ",".join(str(n) for n in range(1, 25))
+    assert transport.written == f"OUTP:ONOFF 1 (@{all_channels})\n".encode()
+
+
 def test_out_off_all_uses_the_full_channel_range() -> None:
     driver, transport = make()
     driver.out_off_all()
@@ -96,6 +109,25 @@ def test_set_voltage_uses_working_channels() -> None:
     driver.working_channels = [1, 3]
     driver.set_voltage(3.7)
     assert transport.written == b"SOUR:VOLT 3.7(@1,2,3)\n"
+
+
+def test_set_voltage_defaults_to_the_full_channel_range() -> None:
+    driver, transport = make()
+    driver.set_voltage(3.7)
+    all_channels = ",".join(str(n) for n in range(1, 25))
+    assert transport.written == f"SOUR:VOLT 3.7(@{all_channels})\n".encode()
+
+
+def test_set_voltage_from_array_writes_one_command_per_channel() -> None:
+    driver, transport = make()
+    driver.set_voltage_from_array([3.5, 3.6, 3.7], start_ch=2)
+    assert transport.written == b"SOUR2:VOLT 3.5\nSOUR3:VOLT 3.6\nSOUR4:VOLT 3.7\n"
+
+
+def test_set_voltage_from_array_clamps_out_of_range_values() -> None:
+    driver, transport = make()
+    driver.set_voltage_from_array([10.0], start_ch=1)  # max is 6V
+    assert transport.written == b"SOUR1:VOLT 6\n"
 
 
 def test_set_current_defaults_to_working_channels() -> None:
@@ -202,10 +234,82 @@ def test_set_current_range_honors_explicit_channel_args_over_working_channels() 
     assert transport.written == b"SOUR:RANG 2 (@5,6)\nSOUR:OUTCURR 1(@5,6)\n"
 
 
-def test_fault_simulation_selects_the_right_command() -> None:
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("normal", b"FAULt:SIMUlate 0 (@1)\n"),
+        ("open_pos", b"FAULt:SIMUlate 1 (@1)\n"),
+        ("open_neg", b"FAULt:SIMUlate 4 (@1)\n"),
+        ("out_short", b"FAULt:SIMUlate 8 (@1)\n"),
+        ("reverse_pol", b"FAULt:SIMUlate 96 (@1)\n"),
+    ],
+)
+def test_fault_simulation_selects_the_right_command(value: str, expected: bytes) -> None:
     driver, transport = make()
-    driver.fault_simulation("out_short", start_ch=1, end_ch=1)
-    assert transport.written == b"FAULt:SIMUlate 8 (@1)\n"
+    driver.fault_simulation(value, start_ch=1, end_ch=1)
+    assert transport.written == expected
+
+
+def test_fault_simulation_defaults_to_normal_for_an_unknown_value() -> None:
+    driver, transport = make()
+    driver.fault_simulation("not-a-real-value", start_ch=1, end_ch=1)
+    assert transport.written == b"FAULt:SIMUlate 0 (@1)\n"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("fast", b"MEAS:CAPR 0 (@1,2)\n"),
+        ("medium", b"MEAS:CAPR 1 (@1,2)\n"),
+        ("slow", b"MEAS:CAPR 2 (@1,2)\n"),
+    ],
+)
+def test_set_sampling_rate_selects_the_right_command(value: str, expected: bytes) -> None:
+    driver, transport = make()
+    driver.working_channels = [1, 2]
+    driver.set_sampling_rate(value)
+    assert transport.written == expected
+
+
+def test_set_sampling_rate_defaults_to_fast_for_an_unknown_value() -> None:
+    driver, transport = make()
+    driver.working_channels = [1, 2]
+    driver.set_sampling_rate("not-a-real-value")
+    assert transport.written == b"MEAS:CAPR 0 (@1,2)\n"
+
+
+def test_get_current_avr_averages_the_samples() -> None:
+    driver, transport = make()
+    driver.working_channels = [1, 2]
+    transport.feed(b"100.0,200.0\n")
+    transport.feed(b"200.0,400.0\n")
+    assert driver.get_current_avr(n_samples=2, delay=0) == [150.0, 300.0]
+
+
+def test_get_current_avr_as_dict_uses_the_key_prefix() -> None:
+    driver, transport = make()
+    driver.working_channels = [1, 2]
+    transport.feed(b"100.0,200.0\n")
+    transport.feed(b"200.0,400.0\n")
+    assert driver.get_current_avr(ret_as_dict=True, n_samples=2, delay=0) == {
+        "NGI_1I": 150.0,
+        "NGI_2I": 300.0,
+    }
+
+
+def test_get_current_avr_clamps_n_samples_below_the_minimum() -> None:
+    """n_samples is range_check-clamped to [2, 16], so 1 still takes two samples."""
+    driver, transport = make()
+    driver.working_channels = [1, 1]
+    transport.feed(b"100.0\n")
+    transport.feed(b"200.0\n")
+    assert driver.get_current_avr(n_samples=1, delay=0) == [150.0]
+
+
+def test_close_closes_the_session() -> None:
+    driver, transport = make()
+    driver.close()
+    assert transport.state is TransportState.CLOSED
 
 
 # -- connect_tcp / _finish_connecting ----------------------------------------
