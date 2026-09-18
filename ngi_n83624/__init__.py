@@ -10,7 +10,7 @@ if that dependency isn't installed. Import it explicitly instead:
 
 from .legacy import N83624Serial, N83624Tcp, n83624_06_05_class_serial, n83624_06_05_class_tcp
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "N83624Tcp",

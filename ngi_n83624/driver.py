@@ -24,6 +24,7 @@ from contextlib import suppress
 
 import numpy as np
 from scpi_driver_core import ScpiClient, ScpiSession
+from scpi_driver_core.exceptions import ProtocolError
 from scpi_driver_core.execution.retry import RetryPolicy
 from scpi_driver_core.scpi import ScpiTextCodec, parse_csv_floats
 from scpi_driver_core.transport import ReplayPolicy, VisaTransport
@@ -157,13 +158,9 @@ class N83624Driver:
         """
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
         transport = VisaTransport(ip_port, timeout_s=timeout_s)
-        # VISA frames its own messages; the codec adds no response terminator.
         codec = ScpiTextCodec(response_terminator=None)
         client = ScpiClient(transport, codec=codec, minimum_interval_s=minimum_interval_s)
         session = ScpiSession("ngi_n83624", client)
-        # So get_communication_timeout() reports the real transport timeout,
-        # and so set_communication_timeout() has something meaningful to
-        # override later - see _write/_query, which now apply this value.
         session.set_communication_timeout(timeout_s)
         session.open()
         return cls._finish_connecting(
@@ -186,11 +183,7 @@ class N83624Driver:
         opc_retry_policy: RetryPolicy = OPC_RETRY_POLICY,
         sync_before_current: bool = False,
     ) -> N83624Driver:
-        """Build the driver around an already-open session and print the connection banner.
-
-        Split out from :meth:`connect_tcp` so the "close on failure" behavior
-        is testable against a simulated transport, independent of VISA.
-        """
+        """Build the driver around an already-open session and print the connection banner."""
         try:
             driver = cls(
                 session,
@@ -202,9 +195,6 @@ class N83624Driver:
             )
             print(f"**** Connected to: {driver.get_idn()} ****")
         except BaseException:
-            # get_idn() only retries TransportError; anything else (a bad
-            # *IDN? reply, a misconfiguration) must not leave the transport
-            # open with nothing left referencing it.
             with suppress(Exception):
                 session.close()
             raise
@@ -213,67 +203,29 @@ class N83624Driver:
     def close(self) -> None:
         self.session.close()
 
-    # -- LPDS-002 connection-lifecycle methods -------------------------------
-    #
-    # A minimal set of the mandatory universal methods LPDS-002
-    # (https://github.com/ami3go/Lab-equipment-pyDrivers) defines, added as
-    # thin wrappers around behavior ScpiSession already implements. Not a
-    # full LPDS-002 pass: connect()/disconnect() as canonical instance
-    # methods would mean redesigning construction around them instead of
-    # connect_tcp()'s classmethod-factory pattern, and naming aliases
-    # (e.g. enable_output for out_on) are left for a later pass.
-
     def is_connected(self, alias: str | None = None) -> bool:
-        """Whether the transport holds its resource.
-
-        Never performs device I/O, so it cannot block and isn't evidence the
-        instrument is actually responding - use :meth:`check_communication`
-        for that. ``alias`` is accepted for LPDS-002 signature compatibility;
-        this driver manages a single session.
-        """
+        """Whether the transport holds its resource."""
         del alias
         return self.session.is_connected
 
     def check_communication(self, alias: str | None = None) -> bool:
-        """Ask the instrument whether it's there, via a bounded, non-destructive query.
-
-        Returns ``False`` on failure rather than raising - see
-        :attr:`ScpiSession.health` for the reason.
-        """
+        """Ask the instrument whether it is responding via a bounded query."""
         del alias
         return self.session.check_communication()
 
     def get_identity(self, alias: str | None = None, refresh: bool = True) -> str:
-        """A stable, human-readable identity string (the raw ``*IDN?`` reply).
-
-        Cached by the session after the first query; pass ``refresh=True``
-        (the default) to force a fresh query.
-        """
+        """Return the raw ``*IDN?`` reply."""
         del alias
         return self.session.get_identity(refresh=refresh).raw
 
     def set_communication_timeout(self, timeout_s: float, alias: str | None = None) -> float:
-        """Set the timeout applied to this driver's own writes and queries.
-
-        Takes effect starting with the next call to any command/query method
-        - see :meth:`_write`/:meth:`_query`. ``connect_tcp`` already populates
-        this from its own ``timeout_s`` argument, so it reflects the real
-        transport timeout unless overridden here afterward.
-
-        Raises:
-            ConfigurationError: if ``timeout_s`` is not finite and positive.
-        """
+        """Set the timeout applied to this driver's own writes and queries."""
         del alias
         self.session.set_communication_timeout(timeout_s)
         return timeout_s
 
     def get_communication_timeout(self, alias: str | None = None) -> float:
-        """The timeout applied to this driver's own writes and queries, in seconds.
-
-        Falls back to :data:`DEFAULT_COMMUNICATION_TIMEOUT_S` only for a
-        driver constructed directly (bypassing ``connect_tcp``) that never
-        called :meth:`set_communication_timeout` either.
-        """
+        """Return the timeout applied to this driver's own writes and queries."""
         del alias
         timeout_s = self.session.communication_timeout_s
         return DEFAULT_COMMUNICATION_TIMEOUT_S if timeout_s is None else timeout_s
@@ -290,8 +242,6 @@ class N83624Driver:
         self._s_ch = range_check(int(first_last_ch[0]), 1, self._e_ch_all, "working_channels")
         self._e_ch = range_check(int(first_last_ch[1]), 1, self._e_ch_all, "working_channels")
 
-    # -- transport plumbing -------------------------------------------------
-
     def _write(self, cmd: str) -> None:
         self.client.write(cmd, timeout_s=self.session.communication_timeout_s)
 
@@ -305,9 +255,6 @@ class N83624Driver:
         )
 
     def _query_csv_floats(self, cmd: str) -> list[float]:
-        # Rounded to match the legacy driver's __txt_to_array, so a script
-        # comparing/logging exact measurement values sees the same precision
-        # as before the migration.
         return [round(value, 4) for value in parse_csv_floats(self._query(cmd))]
 
     def _resolve_ch_range(self, start_ch, end_ch, caller: str):
@@ -319,13 +266,12 @@ class N83624Driver:
         end_ch = range_check(int(end_ch), 1, self._e_ch_all, caller)
         return start_ch, end_ch
 
-    def _array_to_dict(self, array_var, prefix="I"):
+    def _array_to_dict(self, array_var, prefix="I", start_ch=1):
+        """Map measurement values to keys using their actual channel numbers."""
         return {
-            f"{self.key_prefix}{i + 1}{prefix.capitalize()}": val
-            for i, val in enumerate(array_var)
+            f"{self.key_prefix}{channel}{prefix.capitalize()}": val
+            for channel, val in enumerate(array_var, start=start_ch)
         }
-
-    # -- setting output -------------------------------------------------------
 
     def set_voltage(self, cell_volt):
         """Setting output voltage. :param cell_volt: 0V to 6V."""
@@ -334,12 +280,8 @@ class N83624Driver:
 
     def set_voltage_from_array(self, v_array, start_ch=1):
         for z, cell_volt in enumerate(v_array):
-            ch_num = range_check(
-                z + start_ch, self._s_ch, self._e_ch_all, "set_voltage_from_array: ch_num"
-            )
-            cell_volt = range_check(
-                cell_volt, ngi_min_voltage, ngi_max_voltage, "set_voltage_from_array: item"
-            )
+            ch_num = range_check(z + start_ch, self._s_ch, self._e_ch_all, "set_voltage_from_array: ch_num")
+            cell_volt = range_check(cell_volt, ngi_min_voltage, ngi_max_voltage, "set_voltage_from_array: item")
             self._write(self.cmd.source.voltage.ch_num(ch_num, cell_volt))
 
     def set_current(self, cell_current_mA, start_ch=None, end_ch=None):
@@ -357,7 +299,6 @@ class N83624Driver:
             "auto": auto_cmd,
         }
         self._write(ranges.get(value, auto_cmd))
-        # set minimum current of 1mA because by default it is 0 when switching ranges
         if value in ("auto", "low"):
             self.set_current(1, start_ch=start_ch, end_ch=end_ch)
 
@@ -399,49 +340,35 @@ class N83624Driver:
         }
         self._write(ranges.get(value, normal))
 
-    # -- reading measurements -------------------------------------------------
-
     def get_voltage(self, ret_as_dict=False, start_ch=None, end_ch=None):
         start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch, "get_voltage")
         values = self._query_csv_floats(self.cmd.measure.voltage.ch_range(start_ch, end_ch))
         if ret_as_dict:
-            return self._array_to_dict(values, self.key_end_volt)
+            return self._array_to_dict(values, self.key_end_volt, start_ch=start_ch)
         return values
 
     def get_current(self, ret_as_dict=False, start_ch=None, end_ch=None):
         start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch, "get_current")
         if self._sync_before_current:
-            self.wait_for_completion()
+            reply = self.wait_for_completion()
+            if reply.strip() != "1":
+                raise ProtocolError(
+                    f"Cannot synchronize current measurement: *OPC? returned {reply!r}, expected '1'"
+                )
         else:
-            self._sleep(self._current_settle_s)  # let the current ADC settle; see CURRENT_QUERY_SETTLE_S
+            self._sleep(self._current_settle_s)
         values = self._query_csv_floats(self.cmd.measure.current.ch_range(start_ch, end_ch))
         if ret_as_dict:
-            return self._array_to_dict(values, self.key_end_curr)
+            return self._array_to_dict(values, self.key_end_curr, start_ch=start_ch)
         return values
 
     def wait_for_completion(self) -> str:
-        """Poll ``*OPC?`` to confirm the instrument has finished processing prior commands.
+        """Poll ``*OPC?`` and return its raw reply.
 
-        The IEEE-488.2-correct alternative to guessing with a fixed sleep
-        like ``CURRENT_QUERY_SETTLE_S``: a compliant instrument holds off
-        answering ``*OPC?`` until it's genuinely done, rather than answering
-        immediately and leaving the caller to guess how long to wait.
-
-        This uses :data:`OPC_RETRY_POLICY`, not ``query_retry_policy`` -
-        *OPC?* is just another query over the same link and can time out
-        exactly like any other (with the same transport-fault recovery via
-        :meth:`ScpiSession.recover_if_faulted`), so it needs the same
-        protection, not an exemption. It gets its own, smaller budget rather
-        than reusing the measurement-query policy because a broken/
-        unsupported *OPC?* fails the same way every time; retrying it for
-        the full measurement-query budget (up to ~8 minutes) would make an
-        unsupported *OPC?* far more expensive than simply not using it.
-
-        Returns:
-            The raw reply. A value other than ``"1"`` is reported rather
-            than raised: this instrument's *OPC?* behavior has never been
-            validated against real hardware, so treat this as best-effort
-            synchronization, not a guarantee, until it has been.
+        A non-``1`` reply is reported and returned so hardware-validation code
+        can characterize unsupported or unusual firmware behavior. Callers
+        that rely on synchronization, such as ``get_current`` with
+        ``sync_before_current=True``, must require ``1`` before proceeding.
         """
         reply = self._query(self.cmd.opc.req(), retry_policy=self._opc_retry_policy)
         if reply.strip() != "1":
@@ -457,17 +384,16 @@ class N83624Driver:
 
         avg = np.mean(np.array(i_cells_array), axis=0).tolist()
         if ret_as_dict:
-            return self._array_to_dict(avg, self.key_end_curr)
+            return self._array_to_dict(avg, self.key_end_curr, start_ch=self._s_ch)
         return avg
 
     def get_idn(self):
         return self._query(self.cmd.idn.req())
 
     def get_csv_keys(self):
-        """Returns CSV keys for Voltage and Current for pre-defined channels."""
-        current_keys = []
-        voltage_keys = []
-        for z in range(self._e_ch):
-            current_keys.append(f"{self.key_prefix}{z + 1}{self.key_end_curr}")
-            voltage_keys.append(f"{self.key_prefix}{z + 1}{self.key_end_volt}")
+        """Return CSV keys for the currently configured working-channel range."""
+        channels = range(self._s_ch, self._e_ch + 1)
+        voltage_keys = [f"{self.key_prefix}{ch}{self.key_end_volt}" for ch in channels]
+        channels = range(self._s_ch, self._e_ch + 1)
+        current_keys = [f"{self.key_prefix}{ch}{self.key_end_curr}" for ch in channels]
         return [voltage_keys, current_keys]

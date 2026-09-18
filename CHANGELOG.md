@@ -2,97 +2,39 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-18
+
 ### Added
 
-- `ngi_n83624/commands.py`: the SCPI command-string builders extracted into their own
-  transport-agnostic module, with unit tests that need no hardware or transport.
-- `ngi_n83624/driver.py`: `N83624Driver`, a new TCP driver built on
-  `scpi-driver-core` (`ScpiSession`/`ScpiClient`/`VisaTransport`), covering the
-  TCP core primitives (voltage/current/output/measurement) with unit tests
-  against a simulated transport, including transport-fault recovery on retry.
-- `scpi-driver-core` as a runtime dependency (installed from GitHub).
-- `N83624Driver.is_connected`, `check_communication`, `get_identity`,
-  `set_communication_timeout`, `get_communication_timeout`: a first, bounded
-  pass toward the [Lab-equipment-pyDrivers LPDS-002](https://github.com/ami3go/Lab-equipment-pyDrivers/blob/main/AI_Guides/LPDS-002_Mandatory_Public_API_Standard.md)
-  mandatory public API standard, wrapping behavior `ScpiSession` already
-  implements. Not full LPDS-002 compliance - `connect()`/`disconnect()` as
-  canonical instance methods, naming aliases, and risk-level metadata are
-  deliberately out of scope for this pass.
-- Exhaustive unit test coverage: every `storage()` command path and every
-  `N83624Driver` public method.
-- `N83624Driver.wait_for_completion()`: polls `*OPC?` (via `_query`, so it
-  gets the same transport-fault recovery as every other query) to confirm
-  the instrument has finished processing, rather than guessing with a fixed
-  sleep - the IEEE-488.2-correct alternative to `CURRENT_QUERY_SETTLE_S`.
-  Uses its own, smaller `OPC_RETRY_POLICY` rather than the measurement-query
-  retry policy, so a broken/unsupported `*OPC?` (unvalidated against real
-  hardware) fails fast instead of burning the full ~8-minute measurement
-  budget. Opt-in via `sync_before_current=True`; off by default so
-  `get_current()`'s legacy-matched sleep behavior doesn't change until real
-  hardware confirms OPC-based sync is actually reliable on this instrument.
-- `scripts/validate_hardware.py`: a real-hardware validation script for
-  everything the new driver hasn't been checked against yet - `*OPC?`
-  support, whether the 100-attempt/5s query retry and 4.5s current-settle
-  delay are actually needed, and basic connect/read/output round trips.
-  Read-only by default; `--output` is required to run anything that changes
-  output state, scoped to one configurable channel with a warning pause
-  before touching it.
+- `ngi_n83624/commands.py`: transport-agnostic SCPI command builders with unit tests.
+- `ngi_n83624/driver.py`: a new TCP driver built on `scpi-driver-core`, covering voltage/current/output/measurement primitives and transport-fault recovery.
+- Initial LPDS-002-oriented connection/identity/timeout methods.
+- `N83624Driver.wait_for_completion()` with opt-in `*OPC?` synchronization.
+- `scripts/validate_hardware.py` for real-hardware characterization and validation.
+- Regression tests for channel-key numbering and synchronization behavior.
 
 ### Changed
 
-- `scpi-driver-core` is now a public repository, so `ci.yml`'s
-  `SCPI_DRIVER_CORE_TOKEN` authentication step (needed while it was
-  private) has been removed as dead weight.
-- `Docs/Driver/software_architecture.md` and `packaging.md` rewritten to
-  describe the actual current dual-path architecture (legacy + new driver)
-  - both predated the migration and still described the new driver as a
-    future task after it had already shipped.
-- `requirements.txt` was missing `scpi-driver-core` entirely; added.
-- `MANIFEST.in` now includes `scripts/*.py` in the sdist (it previously
-  covered `Example/` but not the new `scripts/` directory).
-- README's separate "Software architecture map" diagram updated to show
-  both paths - it had gone stale relative to the "Migration to
-  scpi-driver-core" section above it in the same file. Production note and
-  Documentation section updated to reference the new driver's unvalidated
-  status and `scripts/validate_hardware.py`.
+- `scpi-driver-core` is public, so obsolete CI token authentication was removed.
+- `Docs/Driver/software_architecture.md`, `packaging.md`, and README architecture documentation were updated for the dual legacy/new-driver design.
+- `requirements.txt` now includes `scpi-driver-core`.
+- `MANIFEST.in` includes `scripts/*.py` in source distributions.
+- `scpi-driver-core` is pinned to commit `241d4b6a287bda7a957a9bd8e4c640c7e50f3764` instead of the moving `main` branch, making installs reproducible.
 
 ### Fixed
 
-- A `SyntaxError` in `N83624/n83624_06_05_class.py`'s `short_circuit_test`
-  (a corrupted `if` condition) that broke importing the package entirely.
-- `N83624Driver.connect_tcp` could leak an open transport if anything after
-  `session.open()` raised (e.g. a non-retryable error from the initial
-  `*IDN?`), since nothing referenced the session/transport for the caller to
-  close. Split into `connect_tcp` / `_finish_connecting` so the "close on
-  failure" path is unit-testable against a simulated transport.
-- `get_current()` was missing the original driver's current-specific 4.5s
-  settle delay (`query_delay`), silently reproducing the query with no pause
-  where the legacy driver deliberately had one. Restored as an overridable,
-  injectable-sleep `current_settle_s` (default `CURRENT_QUERY_SETTLE_S`).
-- `set_current_range()` resolved `start_ch`/`end_ch` but then built every
-  command from `working_channels` instead, silently ignoring explicit
-  channel arguments. Carried over from the same bug in the legacy driver;
-  fixed here (legacy file left untouched, per the compatibility requirement).
-- `storage.opc` was built from `"*OPС"` with a Cyrillic С (U+0421), not the
-  real IEEE-488.2 `*OPC` - the driver had never actually sent a real
-  `*OPC`/`*OPC?` to the instrument.
-- `_ch_range.ch_range()` (every channel-range command) silently built a
-  malformed, no-channel command (e.g. `"MEAS:VOLT? (@)"`) instead of raising
-  when `ch_start > ch_end`, since `range(10, 3)` is empty. Now raises
-  `ValueError`.
-- `_query_csv_floats()` dropped the legacy driver's rounding of measurement
-  values to 4 decimal places, silently changing the precision of
-  `get_voltage`/`get_current`/`get_current_avr` results. Restored.
-- `get_current_avr()`'s inter-sample delay used `time.sleep()` directly
-  instead of the injectable `self._sleep` hook `current_settle_s` uses,
-  making the sleep-injection design inconsistent (a driver constructed with
-  a fake `sleep` for testability still blocked for real between samples).
-- `set_communication_timeout()`/`get_communication_timeout()` didn't
-  actually govern the timeout used by the driver's own writes and queries,
-  and the getter's fallback was a hardcoded constant disconnected from the
-  real transport timeout `connect_tcp` configured. `_write`/`_query` now
-  apply `session.communication_timeout_s`, and `connect_tcp` populates it
-  from its own `timeout_s` argument.
+- A `SyntaxError` in the legacy `short_circuit_test` that broke package imports.
+- Connection cleanup on initial `*IDN?`/post-open failure.
+- Restored the legacy current-query settle delay in the new driver.
+- `set_current_range()` now honors explicit channel arguments.
+- Corrected the Cyrillic `С` in `*OPC` to the real Latin `C`.
+- Reversed channel ranges now raise instead of producing malformed SCPI.
+- Restored legacy four-decimal measurement rounding.
+- `get_current_avr()` now uses the injectable sleep hook.
+- Communication timeout setters/getters now govern actual I/O calls.
+- Measurement dictionaries now retain the requested channel numbers for partial ranges instead of restarting at channel 1.
+- `get_csv_keys()` now respects both the start and end of `working_channels`.
+- With `sync_before_current=True`, `get_current()` now raises `ProtocolError` and does not read current when `*OPC?` returns anything other than `1`.
 
 ## 0.1.0 - 2026-08-24
 
