@@ -65,6 +65,19 @@ DEFAULT_MINIMUM_INTERVAL_S = 0.25
 # byte-for-byte port; needs re-validation against real hardware.
 CURRENT_QUERY_SETTLE_S = 4.5
 
+# Retry policy for *OPC? specifically (see wait_for_completion()), separate
+# from QUERY_RETRY_POLICY on purpose: *OPC? is a synchronization primitive,
+# not a measurement query, and this instrument's *OPC? support has never
+# been validated against real hardware. If it isn't implemented, or isn't
+# implemented correctly, it will keep failing the same way every time -
+# burning the full 100-attempt/5s measurement-query budget (up to ~8
+# minutes) on every call would make a broken *OPC? far more costly than
+# just not using it. A smaller, separately-tunable budget bounds that risk
+# without giving up the same transport-fault recovery every other query
+# gets. Needs re-validation (attempt count and delay both) once real
+# hardware confirms whether/how *OPC? behaves.
+OPC_RETRY_POLICY = RetryPolicy.constant(attempts=10, delay_s=1.0)
+
 
 class N83624Driver:
     """N83624 battery/cell simulator driver.
@@ -78,10 +91,21 @@ class N83624Driver:
             :data:`QUERY_RETRY_POLICY`. Overridable per instance so, for
             example, a test can swap in a policy with no delay instead of
             waiting out the real one.
-        current_settle_s: pause before every current query. Defaults to
+        current_settle_s: pause before every current query, used unless
+            ``sync_before_current`` is set. Defaults to
             :data:`CURRENT_QUERY_SETTLE_S`. Overridable for the same reason
             as ``query_retry_policy``.
-        sleep: how ``current_settle_s`` waits; injectable for tests.
+        opc_retry_policy: retry policy applied to :meth:`wait_for_completion`.
+            Defaults to :data:`OPC_RETRY_POLICY` - deliberately smaller than
+            ``query_retry_policy``; see that constant's docstring for why.
+        sync_before_current: if true, :meth:`get_current` calls
+            :meth:`wait_for_completion` instead of sleeping
+            ``current_settle_s`` before reading. Off by default: this
+            instrument's ``*OPC?`` support is unvalidated, so the known,
+            legacy-matched sleep stays the default until real hardware
+            confirms OPC-based sync is actually reliable here.
+        sleep: how ``current_settle_s`` (and ``get_current_avr``'s
+            inter-sample delay) wait; injectable for tests.
     """
 
     def __init__(
@@ -91,6 +115,8 @@ class N83624Driver:
         max_ch: int = max_ch_number,
         query_retry_policy: RetryPolicy = QUERY_RETRY_POLICY,
         current_settle_s: float = CURRENT_QUERY_SETTLE_S,
+        opc_retry_policy: RetryPolicy = OPC_RETRY_POLICY,
+        sync_before_current: bool = False,
         sleep=time.sleep,
     ):
         self.session = session
@@ -105,6 +131,8 @@ class N83624Driver:
         self.key_end_volt = "V"
         self._query_retry_policy = query_retry_policy
         self._current_settle_s = current_settle_s
+        self._opc_retry_policy = opc_retry_policy
+        self._sync_before_current = sync_before_current
         self._sleep = sleep
 
     @classmethod
@@ -117,6 +145,8 @@ class N83624Driver:
         minimum_interval_s: float | None = DEFAULT_MINIMUM_INTERVAL_S,
         query_retry_policy: RetryPolicy = QUERY_RETRY_POLICY,
         current_settle_s: float = CURRENT_QUERY_SETTLE_S,
+        opc_retry_policy: RetryPolicy = OPC_RETRY_POLICY,
+        sync_before_current: bool = False,
     ) -> N83624Driver:
         """Open a TCP (VISA ``TCPIP::SOCKET``) connection and return a ready driver.
 
@@ -141,6 +171,8 @@ class N83624Driver:
             max_ch=max_ch,
             query_retry_policy=query_retry_policy,
             current_settle_s=current_settle_s,
+            opc_retry_policy=opc_retry_policy,
+            sync_before_current=sync_before_current,
         )
 
     @classmethod
@@ -151,6 +183,8 @@ class N83624Driver:
         max_ch: int,
         query_retry_policy: RetryPolicy,
         current_settle_s: float,
+        opc_retry_policy: RetryPolicy = OPC_RETRY_POLICY,
+        sync_before_current: bool = False,
     ) -> N83624Driver:
         """Build the driver around an already-open session and print the connection banner.
 
@@ -161,6 +195,8 @@ class N83624Driver:
             driver = cls(
                 session,
                 max_ch=max_ch,
+                opc_retry_policy=opc_retry_policy,
+                sync_before_current=sync_before_current,
                 query_retry_policy=query_retry_policy,
                 current_settle_s=current_settle_s,
             )
@@ -259,12 +295,12 @@ class N83624Driver:
     def _write(self, cmd: str) -> None:
         self.client.write(cmd, timeout_s=self.session.communication_timeout_s)
 
-    def _query(self, cmd: str) -> str:
+    def _query(self, cmd: str, *, retry_policy: RetryPolicy | None = None) -> str:
         return self.client.query(
             cmd,
             timeout_s=self.session.communication_timeout_s,
             replay_policy=ReplayPolicy.SAFE,
-            retry_policy=self._query_retry_policy,
+            retry_policy=retry_policy if retry_policy is not None else self._query_retry_policy,
             before_retry=self.session.recover_if_faulted,
         )
 
@@ -374,11 +410,43 @@ class N83624Driver:
 
     def get_current(self, ret_as_dict=False, start_ch=None, end_ch=None):
         start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch, "get_current")
-        self._sleep(self._current_settle_s)  # let the current ADC settle; see CURRENT_QUERY_SETTLE_S
+        if self._sync_before_current:
+            self.wait_for_completion()
+        else:
+            self._sleep(self._current_settle_s)  # let the current ADC settle; see CURRENT_QUERY_SETTLE_S
         values = self._query_csv_floats(self.cmd.measure.current.ch_range(start_ch, end_ch))
         if ret_as_dict:
             return self._array_to_dict(values, self.key_end_curr)
         return values
+
+    def wait_for_completion(self) -> str:
+        """Poll ``*OPC?`` to confirm the instrument has finished processing prior commands.
+
+        The IEEE-488.2-correct alternative to guessing with a fixed sleep
+        like ``CURRENT_QUERY_SETTLE_S``: a compliant instrument holds off
+        answering ``*OPC?`` until it's genuinely done, rather than answering
+        immediately and leaving the caller to guess how long to wait.
+
+        This uses :data:`OPC_RETRY_POLICY`, not ``query_retry_policy`` -
+        *OPC?* is just another query over the same link and can time out
+        exactly like any other (with the same transport-fault recovery via
+        :meth:`ScpiSession.recover_if_faulted`), so it needs the same
+        protection, not an exemption. It gets its own, smaller budget rather
+        than reusing the measurement-query policy because a broken/
+        unsupported *OPC?* fails the same way every time; retrying it for
+        the full measurement-query budget (up to ~8 minutes) would make an
+        unsupported *OPC?* far more expensive than simply not using it.
+
+        Returns:
+            The raw reply. A value other than ``"1"`` is reported rather
+            than raised: this instrument's *OPC?* behavior has never been
+            validated against real hardware, so treat this as best-effort
+            synchronization, not a guarantee, until it has been.
+        """
+        reply = self._query(self.cmd.opc.req(), retry_policy=self._opc_retry_policy)
+        if reply.strip() != "1":
+            print(f"*OPC? returned {reply!r}, expected '1' (unvalidated on real hardware)")
+        return reply
 
     def get_current_avr(self, ret_as_dict=False, n_samples=5, delay=3):
         n_samples = range_check(n_samples, 2, 16, "get average current")

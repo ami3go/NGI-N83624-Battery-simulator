@@ -20,6 +20,16 @@
   deliberately out of scope for this pass.
 - Exhaustive unit test coverage: every `storage()` command path and every
   `N83624Driver` public method.
+- `N83624Driver.wait_for_completion()`: polls `*OPC?` (via `_query`, so it
+  gets the same transport-fault recovery as every other query) to confirm
+  the instrument has finished processing, rather than guessing with a fixed
+  sleep - the IEEE-488.2-correct alternative to `CURRENT_QUERY_SETTLE_S`.
+  Uses its own, smaller `OPC_RETRY_POLICY` rather than the measurement-query
+  retry policy, so a broken/unsupported `*OPC?` (unvalidated against real
+  hardware) fails fast instead of burning the full ~8-minute measurement
+  budget. Opt-in via `sync_before_current=True`; off by default so
+  `get_current()`'s legacy-matched sleep behavior doesn't change until real
+  hardware confirms OPC-based sync is actually reliable on this instrument.
 
 ### Fixed
 

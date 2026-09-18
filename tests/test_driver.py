@@ -10,12 +10,19 @@ from scpi_driver_core.exceptions import ConfigurationError, TransportTimeoutErro
 from scpi_driver_core.execution.retry import RetryPolicy
 from scpi_driver_core.transport import MockTransport, TransportState
 
-from ngi_n83624.driver import CURRENT_QUERY_SETTLE_S, QUERY_RETRY_POLICY, N83624Driver
+from ngi_n83624.driver import (
+    CURRENT_QUERY_SETTLE_S,
+    OPC_RETRY_POLICY,
+    QUERY_RETRY_POLICY,
+    N83624Driver,
+)
 
-# The driver's real retry policy waits 5s between attempts, and get_current()
-# waits 4.5s to let the current ADC settle; tests use zero-delay stand-ins so
-# a simulated fault or a current read doesn't cost real wall-clock time.
+# The driver's real retry policy waits 5s between attempts, get_current()
+# waits 4.5s to let the current ADC settle, and *OPC? retries wait 1s; tests
+# use zero-delay stand-ins so a simulated fault or a current read doesn't
+# cost real wall-clock time.
 FAST_RETRY_POLICY = RetryPolicy.constant(attempts=100, delay_s=0.0)
+FAST_OPC_POLICY = RetryPolicy.constant(attempts=10, delay_s=0.0)
 NO_SETTLE_DELAY = 0.0
 
 
@@ -27,6 +34,7 @@ def make() -> tuple[N83624Driver, MockTransport]:
         session,
         query_retry_policy=FAST_RETRY_POLICY,
         current_settle_s=NO_SETTLE_DELAY,
+        opc_retry_policy=FAST_OPC_POLICY,
         sleep=lambda _seconds: None,
     )
     return driver, transport
@@ -76,6 +84,85 @@ def test_get_voltage_does_not_wait_for_the_current_settle_delay() -> None:
     transport.feed(b"3.701,3.698\n")
     driver.get_voltage(start_ch=1, end_ch=2)
     assert slept == []
+
+
+# -- wait_for_completion() / sync_before_current -----------------------------
+
+
+def test_default_opc_retry_policy_matches_the_module_default() -> None:
+    session = ScpiSession("ngi_n83624", ScpiClient(MockTransport()))
+    driver = N83624Driver(session)
+    assert driver._opc_retry_policy is OPC_RETRY_POLICY
+
+
+def test_sync_before_current_defaults_to_off() -> None:
+    session = ScpiSession("ngi_n83624", ScpiClient(MockTransport()))
+    driver = N83624Driver(session)
+    assert driver._sync_before_current is False
+
+
+def test_wait_for_completion_sends_opc_query_and_returns_the_reply() -> None:
+    driver, transport = make()
+    transport.feed(b"1\n")
+    assert driver.wait_for_completion() == "1"
+    assert transport.written == b"*OPC?\n"
+
+
+def test_wait_for_completion_does_not_raise_on_an_unexpected_reply() -> None:
+    """*OPC?'s behavior on this instrument is unvalidated; report, don't abort."""
+    driver, transport = make()
+    transport.feed(b"0\n")
+    assert driver.wait_for_completion() == "0"
+
+
+def test_wait_for_completion_recovers_from_a_faulted_transport() -> None:
+    """*OPC? is just another query and can time out exactly like a measurement query."""
+    driver, transport = make()
+    transport.fail_next_read(TransportTimeoutError("TMO"), fault=True)
+    transport.feed(b"1\n")
+    assert driver.wait_for_completion() == "1"
+    assert transport.state is TransportState.OPEN
+    assert driver.session.generation == 1
+
+
+def test_wait_for_completion_uses_its_own_smaller_retry_policy() -> None:
+    """Regression test: a broken *OPC? must not burn the full measurement-query budget."""
+    session = ScpiSession("ngi_n83624", ScpiClient(MockTransport()))
+    driver = N83624Driver(session)
+    assert driver._opc_retry_policy.attempts < driver._query_retry_policy.attempts
+
+
+def test_get_current_uses_wait_for_completion_when_sync_before_current_is_set() -> None:
+    transport = MockTransport()
+    transport.open()
+    session = ScpiSession("ngi_n83624", ScpiClient(transport))
+    slept: list[float] = []
+    driver = N83624Driver(
+        session,
+        query_retry_policy=FAST_RETRY_POLICY,
+        sync_before_current=True,
+        sleep=slept.append,
+    )
+    transport.feed(b"1\n")
+    transport.feed(b"120.5\n")
+    assert driver.get_current(start_ch=1, end_ch=1) == [120.5]
+    assert transport.written == b"*OPC?\nMEAS:CURR? (@1)\n"
+    assert slept == []  # no sleep-based settle when OPC-synced
+
+
+def test_get_current_still_sleeps_by_default_with_sync_before_current_unset() -> None:
+    """sync_before_current defaults to off: the legacy-matched sleep stays the default."""
+    transport = MockTransport()
+    transport.open()
+    session = ScpiSession("ngi_n83624", ScpiClient(transport))
+    slept: list[float] = []
+    driver = N83624Driver(
+        session, query_retry_policy=FAST_RETRY_POLICY, current_settle_s=4.5, sleep=slept.append
+    )
+    transport.feed(b"120.5\n")
+    driver.get_current(start_ch=1, end_ch=1)
+    assert transport.written == b"MEAS:CURR? (@1)\n"  # no *OPC?
+    assert slept == [4.5]
 
 
 def test_out_on_writes_the_channel_range() -> None:
