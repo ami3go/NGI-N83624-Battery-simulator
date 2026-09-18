@@ -20,6 +20,7 @@ per the driver/adapter split most SCPI-driver standards in this ecosystem use.
 from __future__ import annotations
 
 import time
+from contextlib import suppress
 
 import numpy as np
 from scpi_driver_core import ScpiClient, ScpiSession
@@ -50,6 +51,16 @@ QUERY_RETRY_POLICY = RetryPolicy.constant(attempts=100, delay_s=5.0)
 # per the datasheet; the original driver enforced this before every write.
 DEFAULT_MINIMUM_INTERVAL_S = 0.25
 
+# The original driver set PyVISA's query_delay to 4.5s (vs. the 1s default
+# every other query used) specifically around the current query - a
+# deliberate, hardware-informed pause get_voltage() never needed, implying
+# the current ADC wants extra settle time. scpi_driver_core has no
+# write-to-read delay primitive to reproduce that exactly (it's a pause
+# between the write and read of one transaction, not before or after it), so
+# this is applied as a plain pre-query sleep instead. Same intent, not a
+# byte-for-byte port; needs re-validation against real hardware.
+CURRENT_QUERY_SETTLE_S = 4.5
+
 
 class N83624Driver:
     """N83624 battery/cell simulator driver.
@@ -63,6 +74,10 @@ class N83624Driver:
             :data:`QUERY_RETRY_POLICY`. Overridable per instance so, for
             example, a test can swap in a policy with no delay instead of
             waiting out the real one.
+        current_settle_s: pause before every current query. Defaults to
+            :data:`CURRENT_QUERY_SETTLE_S`. Overridable for the same reason
+            as ``query_retry_policy``.
+        sleep: how ``current_settle_s`` waits; injectable for tests.
     """
 
     def __init__(
@@ -71,6 +86,8 @@ class N83624Driver:
         *,
         max_ch: int = max_ch_number,
         query_retry_policy: RetryPolicy = QUERY_RETRY_POLICY,
+        current_settle_s: float = CURRENT_QUERY_SETTLE_S,
+        sleep=time.sleep,
     ):
         self.session = session
         self.client = session.client
@@ -83,6 +100,8 @@ class N83624Driver:
         self.key_end_curr = "I"
         self.key_end_volt = "V"
         self._query_retry_policy = query_retry_policy
+        self._current_settle_s = current_settle_s
+        self._sleep = sleep
 
     @classmethod
     def connect_tcp(
@@ -93,8 +112,15 @@ class N83624Driver:
         timeout_s: float = 5.0,
         minimum_interval_s: float | None = DEFAULT_MINIMUM_INTERVAL_S,
         query_retry_policy: RetryPolicy = QUERY_RETRY_POLICY,
+        current_settle_s: float = CURRENT_QUERY_SETTLE_S,
     ) -> N83624Driver:
-        """Open a TCP (VISA ``TCPIP::SOCKET``) connection and return a ready driver."""
+        """Open a TCP (VISA ``TCPIP::SOCKET``) connection and return a ready driver.
+
+        Raises:
+            ScpiDriverError: whatever opening the transport or the initial
+                ``*IDN?`` raised. The transport is closed first, so a failure
+                here never leaks an open connection.
+        """
         max_ch = range_check(max_ch, 1, max_ch_number, "Maximum number of channels")
         transport = VisaTransport(ip_port, timeout_s=timeout_s)
         # VISA frames its own messages; the codec adds no response terminator.
@@ -102,8 +128,42 @@ class N83624Driver:
         client = ScpiClient(transport, codec=codec, minimum_interval_s=minimum_interval_s)
         session = ScpiSession("ngi_n83624", client)
         session.open()
-        driver = cls(session, max_ch=max_ch, query_retry_policy=query_retry_policy)
-        print(f"**** Connected to: {driver.get_idn()} ****")
+        return cls._finish_connecting(
+            session,
+            max_ch=max_ch,
+            query_retry_policy=query_retry_policy,
+            current_settle_s=current_settle_s,
+        )
+
+    @classmethod
+    def _finish_connecting(
+        cls,
+        session: ScpiSession,
+        *,
+        max_ch: int,
+        query_retry_policy: RetryPolicy,
+        current_settle_s: float,
+    ) -> N83624Driver:
+        """Build the driver around an already-open session and print the connection banner.
+
+        Split out from :meth:`connect_tcp` so the "close on failure" behavior
+        is testable against a simulated transport, independent of VISA.
+        """
+        try:
+            driver = cls(
+                session,
+                max_ch=max_ch,
+                query_retry_policy=query_retry_policy,
+                current_settle_s=current_settle_s,
+            )
+            print(f"**** Connected to: {driver.get_idn()} ****")
+        except BaseException:
+            # get_idn() only retries TransportError; anything else (a bad
+            # *IDN? reply, a misconfiguration) must not leave the transport
+            # open with nothing left referencing it.
+            with suppress(Exception):
+                session.close()
+            raise
         return driver
 
     def close(self) -> None:
@@ -176,17 +236,17 @@ class N83624Driver:
 
     def set_current_range(self, value="auto", start_ch=None, end_ch=None):
         """value: "low" for uA, "high" for mA, or "auto"."""
-        self._resolve_ch_range(start_ch, end_ch, "set_current_range")
-        auto_cmd = self.cmd.source.range_auto.ch_range(self._s_ch, self._e_ch)
+        start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch, "set_current_range")
+        auto_cmd = self.cmd.source.range_auto.ch_range(start_ch, end_ch)
         ranges = {
-            "low": self.cmd.source.range_low.ch_range(self._s_ch, self._e_ch),
-            "high": self.cmd.source.range_high.ch_range(self._s_ch, self._e_ch),
+            "low": self.cmd.source.range_low.ch_range(start_ch, end_ch),
+            "high": self.cmd.source.range_high.ch_range(start_ch, end_ch),
             "auto": auto_cmd,
         }
         self._write(ranges.get(value, auto_cmd))
         # set minimum current of 1mA because by default it is 0 when switching ranges
         if value in ("auto", "low"):
-            self.set_current(1)
+            self.set_current(1, start_ch=start_ch, end_ch=end_ch)
 
     def set_sampling_rate(self, value="fast", start_ch=None, end_ch=None):
         """value: "fast" (10ms), "medium" (120ms), or "slow" (480ms)."""
@@ -237,6 +297,7 @@ class N83624Driver:
 
     def get_current(self, ret_as_dict=False, start_ch=None, end_ch=None):
         start_ch, end_ch = self._resolve_ch_range(start_ch, end_ch, "get_current")
+        self._sleep(self._current_settle_s)  # let the current ADC settle; see CURRENT_QUERY_SETTLE_S
         values = self._query_csv_floats(self.cmd.measure.current.ch_range(start_ch, end_ch))
         if ret_as_dict:
             return self._array_to_dict(values, self.key_end_curr)
