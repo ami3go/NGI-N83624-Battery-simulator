@@ -31,6 +31,12 @@
   `get_current()`'s legacy-matched sleep behavior doesn't change until real
   hardware confirms OPC-based sync is actually reliable on this instrument.
 
+### Changed
+
+- `scpi-driver-core` is now a public repository, so `ci.yml`'s
+  `SCPI_DRIVER_CORE_TOKEN` authentication step (needed while it was
+  private) has been removed as dead weight.
+
 ### Fixed
 
 - A `SyntaxError` in `N83624/n83624_06_05_class.py`'s `short_circuit_test`

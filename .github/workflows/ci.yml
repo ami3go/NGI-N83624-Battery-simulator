@@ -25,16 +25,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Authenticate for the private scpi-driver-core dependency
-        # scpi-driver-core is a private repo; pip's git clone of it needs a
-        # token with read access. Requires a SCPI_DRIVER_CORE_TOKEN repo
-        # secret (a PAT, or a GitHub App installation token) with at least
-        # read access to ami3go/scpi-driver-core.
-        run: |
-          git config --global url."https://x-access-token:${SCPI_DRIVER_CORE_TOKEN}@github.com/ami3go/scpi-driver-core".insteadOf "https://github.com/ami3go/scpi-driver-core"
-        env:
-          SCPI_DRIVER_CORE_TOKEN: ${{ secrets.SCPI_DRIVER_CORE_TOKEN }}
-
       - name: Install package
         run: |
           python -m pip install --upgrade pip
