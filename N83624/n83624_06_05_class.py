@@ -413,7 +413,8 @@ class n83624_06_05_class_tcp:
             key = f"CH{i + 1}"
             if volt >= (cell_volt - 0.1):
                 error_description[key] = f"OK , VOLT: {volt}"
-            try:              error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
+            if volt <= (cell_volt - 0.3):
+                error_description[key] = f" *** Shorted ***, VOLT: {volt} *** Shorted *** "
                 error_status = True
 
         if error_status:
