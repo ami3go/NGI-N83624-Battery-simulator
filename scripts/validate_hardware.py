@@ -21,7 +21,7 @@ you intend to drive real voltage/current into it.
 Usage:
     python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET
     python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET --output
-    python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET \\
+    python scripts/validate_hardware.py TCPIP0::192.168.0.111::7000::SOCKET \
         --output --channel 1 --test-voltage 3.7 --test-current-ma 100
 """
 
@@ -205,8 +205,12 @@ def run_output_checks(
             f"setpoint={test_voltage}, readback={voltage_readback}",
         )
     finally:
-        driver.out_off(channel, channel)
-        report.record("out_off (cleanup)", "PASS")
+        try:
+            driver.out_off(channel, channel)
+        except ScpiDriverError as exc:
+            report.record("out_off (cleanup)", "FAIL", f"raised {type(exc).__name__}: {exc}")
+        else:
+            report.record("out_off (cleanup)", "PASS")
 
 
 def main() -> int:
@@ -222,13 +226,19 @@ def main() -> int:
     try:
         run_read_only_checks(driver, report)
         if args.output:
-            run_output_checks(driver, args.channel, args.test_voltage, args.test_current_ma, report)
+            try:
+                run_output_checks(driver, args.channel, args.test_voltage, args.test_current_ma, report)
+            except ScpiDriverError as exc:
+                report.record("output-changing checks", "FAIL", f"raised {type(exc).__name__}: {exc}")
         else:
             report.record(
                 "output-changing checks", "SKIP", "pass --output to run set_voltage/set_current/out_on"
             )
     finally:
-        driver.close()
+        try:
+            driver.close()
+        except ScpiDriverError as exc:
+            report.record("close", "FAIL", f"raised {type(exc).__name__}: {exc}")
 
     return report.summary()
 
