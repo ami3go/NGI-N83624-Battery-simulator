@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-09-19
+
+### Added
+
+- `Docs/Driver/hardware_validation.md`: complete real-hardware/HIL validation guide, including safe-state requirements, batch validation levels, recovery testing, stress/soak qualification, result artifacts, and the recommended single `hil_validate.py` runner architecture.
+
 ## 0.2.0 - 2026-09-18
 
 ### Added
