@@ -24,9 +24,7 @@ def range_check(value: Real, min_value: Real, max_value: Real, value_name: str) 
     if isinstance(value, bool) or not isinstance(value, Real):
         raise N83624ValidationError(f"{value_name} must be numeric, got {type(value).__name__}")
     if value < min_value or value > max_value:
-        raise N83624ValidationError(
-            f"{value_name} must be in range [{min_value}, {max_value}], got {value}"
-        )
+        raise N83624ValidationError(f"{value_name} must be in range [{min_value}, {max_value}], got {value}")
     return value
 
 
