@@ -1,5 +1,7 @@
 """Backward-compatible imports for the historical serial module."""
 
+# ruff: noqa: I001
+
 from ngi_n83624.commands import (
     MAX_CHANNELS as max_ch_number,
     Req3,
