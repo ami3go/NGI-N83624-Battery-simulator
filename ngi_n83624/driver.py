@@ -71,9 +71,7 @@ class _N83624Base:
         except (TypeError, ValueError) as exc:
             raise N83624ValidationError("max_channels must be an integer") from exc
         if not 1 <= value <= MAX_CHANNELS:
-            raise N83624ValidationError(
-                f"max_channels must be in range [1, {MAX_CHANNELS}], got {value}"
-            )
+            raise N83624ValidationError(f"max_channels must be in range [1, {MAX_CHANNELS}], got {value}")
         return value
 
     def _set_max_channels(self, value: int) -> None:
@@ -199,9 +197,7 @@ class _N83624Base:
         try:
             command = ranges[normalized].ch_range(start, end)
         except KeyError as exc:
-            raise N83624ValidationError(
-                f"current range must be one of {sorted(ranges)}, got {value!r}"
-            ) from exc
+            raise N83624ValidationError(f"current range must be one of {sorted(ranges)}, got {value!r}") from exc
         self.send(command)
         if normalized in {"auto", "low"}:
             self.set_current(1, start, end)
@@ -222,9 +218,7 @@ class _N83624Base:
         try:
             command = rates[normalized].ch_range(start, end)
         except KeyError as exc:
-            raise N83624ValidationError(
-                f"sampling rate must be one of {sorted(rates)}, got {value!r}"
-            ) from exc
+            raise N83624ValidationError(f"sampling rate must be one of {sorted(rates)}, got {value!r}") from exc
         self.send(command)
 
     def out_on(self, start_ch: int | None = None, end_ch: int | None = None) -> None:
@@ -251,16 +245,11 @@ class _N83624Base:
         except ValueError as exc:
             raise N83624ProtocolError(f"malformed numeric response: {reply!r}") from exc
         if expected_count is not None and len(values) != expected_count:
-            raise N83624ProtocolError(
-                f"expected {expected_count} values, got {len(values)} from {reply!r}"
-            )
+            raise N83624ProtocolError(f"expected {expected_count} values, got {len(values)} from {reply!r}")
         return values
 
     def _array_to_dict(self, values: Sequence[float], start_ch: int, suffix: str) -> dict[str, float]:
-        return {
-            f"{self.key_prefix}{start_ch + offset}{suffix}": value
-            for offset, value in enumerate(values)
-        }
+        return {f"{self.key_prefix}{start_ch + offset}{suffix}": value for offset, value in enumerate(values)}
 
     def get_voltage(
         self,
@@ -336,19 +325,15 @@ class _N83624Base:
         try:
             command = modes[normalized].ch_range(start, end)
         except KeyError as exc:
-            raise N83624ValidationError(
-                f"fault simulation mode must be one of {sorted(modes)}, got {value!r}"
-            ) from exc
+            raise N83624ValidationError(f"fault simulation mode must be one of {sorted(modes)}, got {value!r}") from exc
         self.send(command)
 
     def get_csv_keys(self) -> list[list[str]]:
         voltage_keys = [
-            f"{self.key_prefix}{channel}{self.key_end_volt}"
-            for channel in range(self._s_ch, self._e_ch + 1)
+            f"{self.key_prefix}{channel}{self.key_end_volt}" for channel in range(self._s_ch, self._e_ch + 1)
         ]
         current_keys = [
-            f"{self.key_prefix}{channel}{self.key_end_curr}"
-            for channel in range(self._s_ch, self._e_ch + 1)
+            f"{self.key_prefix}{channel}{self.key_end_curr}" for channel in range(self._s_ch, self._e_ch + 1)
         ]
         return [voltage_keys, current_keys]
 
@@ -485,9 +470,7 @@ class N83624Tcp(_N83624Base):
                         rm.close()
                     except Exception:
                         logger.exception("failed to close VISA resource manager after connect failure")
-                raise N83624ConnectionError(
-                    f"failed to connect to NGI resource {self.resource!r}"
-                ) from exc
+                raise N83624ConnectionError(f"failed to connect to NGI resource {self.resource!r}") from exc
 
     def send(self, cmd_str: str) -> None:
         with self._lock:
@@ -502,8 +485,10 @@ class N83624Tcp(_N83624Base):
     def query(self, cmd_str: str, *, query_delay_s: float | None = None) -> str:
         with self._lock:
             inst = self._require_connected()
-            requested_delay = self.query_delay_s if query_delay_s is None else float(
-                range_check(query_delay_s, 0.0, 30.0, "query_delay_s")
+            requested_delay = (
+                self.query_delay_s
+                if query_delay_s is None
+                else float(range_check(query_delay_s, 0.0, 30.0, "query_delay_s"))
             )
             previous_query_delay = getattr(inst, "query_delay", self.query_delay_s)
             last_error: Exception | None = None
@@ -622,9 +607,7 @@ class N83624Serial(_N83624Base):
             try:
                 written = inst.write(payload)
                 if written is not None and written != len(payload):
-                    raise N83624CommunicationError(
-                        f"partial serial write: wrote {written} of {len(payload)} bytes"
-                    )
+                    raise N83624CommunicationError(f"partial serial write: wrote {written} of {len(payload)} bytes")
                 flush = getattr(inst, "flush", None)
                 if callable(flush):
                     flush()
@@ -649,23 +632,17 @@ class N83624Serial(_N83624Base):
                 try:
                     written = inst.write(payload)
                     if written is not None and written != len(payload):
-                        raise N83624CommunicationError(
-                            f"partial serial write: wrote {written} of {len(payload)} bytes"
-                        )
+                        raise N83624CommunicationError(f"partial serial write: wrote {written} of {len(payload)} bytes")
                     flush = getattr(inst, "flush", None)
                     if callable(flush):
                         flush()
                     raw = inst.readline()
                     if not raw:
-                        raise N83624TimeoutError(
-                            f"serial query timed out waiting for reply to {cmd_str!r}"
-                        )
+                        raise N83624TimeoutError(f"serial query timed out waiting for reply to {cmd_str!r}")
                     try:
                         return bytes(raw).decode("ascii", errors="strict").removesuffix("\r\n")
                     except UnicodeDecodeError as exc:
-                        raise N83624ProtocolError(
-                            f"non-ASCII serial response to {cmd_str!r}: {raw!r}"
-                        ) from exc
+                        raise N83624ProtocolError(f"non-ASCII serial response to {cmd_str!r}: {raw!r}") from exc
                 except N83624ProtocolError:
                     raise
                 except (N83624CommunicationError, serial.SerialException, OSError) as exc:
