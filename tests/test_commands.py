@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from ngi_n83624.commands import MAX_CHANNELS, range_check, storage, validate_channel_range
 from ngi_n83624.exceptions import N83624ValidationError
