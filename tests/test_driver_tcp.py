@@ -7,6 +7,7 @@ import pytest
 from ngi_n83624 import N83624Tcp
 from ngi_n83624.exceptions import (
     N83624CommunicationError,
+    N83624ProtocolError,
     N83624ValidationError,
     ShortCircuitDetectedError,
 )
@@ -149,7 +150,7 @@ def test_measurement_length_mismatch_is_rejected() -> None:
     command = driver.cmd.measure.voltage.ch_range(1, 2)
     instrument.responses[command] = "4.1\r\n"
 
-    with pytest.raises(Exception, match="expected 2 values"):
+    with pytest.raises(N83624ProtocolError, match="expected 2 values"):
         driver.get_voltage(start_ch=1, end_ch=2)
 
 
